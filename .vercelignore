@@ -1,0 +1,7 @@
+tests
+migrations
+site
+scripts
+.venv
+.uv
+__pycache__
