@@ -38,7 +38,7 @@ EXCLUDE_DIRS = {
     "site",
     "dist",
 }
-EXCLUDE_GLOBS = ["*.pyc", "*.pyo", ".DS_Store", ".env", ".env.*", "*.log"]
+EXCLUDE_GLOBS = ["*.pyc", "*.pyo", ".DS_Store", ".env", ".env.*", "vercel.env", "*.log"]
 KEEP_FILES = {".env.example"}
 
 SECRET_PATTERNS = {
