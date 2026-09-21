@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>StudyBuddy — Your Canvas courses, in Telegram and Slack</title>
+<meta name="description" content="A morning digest, evening nudges, and a Saturday review of what you missed and what's coming. Free. Self-hosted. Yours.">
+<meta property="og:title" content="StudyBuddy — Your Canvas courses, in Telegram and Slack">
+<meta property="og:description" content="Morning digest, evening nudges, Saturday review. Free. Self-hosted. Read-only Canvas.">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="StudyBuddy — Your Canvas courses, in Telegram and Slack">
+<meta name="twitter:description" content="Morning digest, evening nudges, Saturday review. Free. Self-hosted.">
+<link rel="icon" href="data:,📚">
+<style>
+/* Targo-inspired, PRD-compliant: no external fonts, videos, or scripts. */
+:root{
+  --bg:#F2F1F0; --fg:#2b3033; --muted:#6b6f72; --nav:#3a3a3a;
+  --accent:#15BCDF; --accent-hover:#3fd0ef; --accent-border:#0fa3c2;
+  --card:#faf9f8; --line:#e2dedb; --bubble:#e8f7fb; --slack-bg:#f8f7f6;
+  --dark:#1a1c1e; --max:1100px;
+  --font:"Quantico","Arial Narrow",Arial,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#16181a; --fg:#f0ede6; --muted:#b8b3a8; --nav:#d8d4cc;
+    --card:#1e2124; --line:#33373b; --bubble:#12333c; --slack-bg:#1b1e20; }
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font);line-height:1.6}
+h1,h2,h3{text-transform:uppercase;letter-spacing:.01em;line-height:.98;margin:0}
+a{color:var(--nav);text-decoration:none}
+a:hover{color:#000}
+@media (prefers-color-scheme: dark){ a:hover{color:#fff} }
+a:focus-visible,.btn:focus-visible,label.menu-btn:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.wrap{max-width:var(--max);margin:0 auto;padding:0 clamp(20px,4vw,48px)}
+/* ---- nav ---- */
+.nav{display:flex;flex-wrap:wrap;align-items:center;gap:clamp(20px,5vw,56px);padding:clamp(20px,3vw,38px) 0}
+.brand{display:flex;align-items:center;gap:10px;font-size:clamp(22px,5vw,30px);letter-spacing:-.5px;color:var(--fg)}
+.brand .dot{width:38px;height:38px;border-radius:50%;background:var(--dark);position:relative;flex:none}
+.brand .dot::after{content:"";position:absolute;left:9px;top:15px;width:20px;height:8px;border-radius:50%;background:#fff;transform:rotate(-25deg)}
+@media (prefers-color-scheme: dark){ .brand .dot{background:var(--accent)} }
+.nav-links{display:flex;gap:34px;font-weight:700;font-size:clamp(12px,2.4vw,15px);letter-spacing:.06em;white-space:nowrap}
+.nav-cta{margin-left:auto}
+.btn{display:inline-block;text-transform:uppercase;font-weight:700;letter-spacing:.14em;text-decoration:none;cursor:pointer}
+.btn-contact{background:transparent;border:0;color:var(--fg);padding:14px 26px;
+  clip-path:polygon(0 0,calc(100% - 12px) 0,100% 12px,100% 100%,12px 100%,0 calc(100% - 12px))}
+.btn-contact:hover{background:rgba(127,127,127,.14)}
+#menu-toggle{display:none}
+label.menu-btn{display:none;flex-direction:column;gap:5px;padding:10px;cursor:pointer;margin-left:auto}
+label.menu-btn span{display:block;width:22px;height:2px;background:var(--fg)}
+.mobile-menu{display:none;flex-direction:column;gap:18px;padding:6px 0 18px;font-weight:700;letter-spacing:.06em}
+/* ---- hero ---- */
+.hero{position:relative;overflow:hidden;min-height:100svh;background:var(--bg)}
+.hero::before{content:"";position:absolute;top:0;right:-20%;width:99%;height:100%;pointer-events:none;
+  background:linear-gradient(115deg,transparent 55%,rgba(21,188,223,.16) 75%,rgba(21,188,223,.30) 100%)}
+.hero-inner{position:relative;padding:min(clamp(40px,9vw,120px),9vh) 0 min(clamp(36px,6vw,80px),7vh)}
+.hero h1{font-size:min(clamp(34px,7.6vw,80px),9.2vh);font-weight:700;padding:0 0 0 clamp(20px,9vw,118px)}
+.hero h1 .row{display:block}
+.hero h1 .ind{padding-left:min(238px,28vw)}
+.hero h1 .accent{color:var(--accent)}
+.hero .sub{margin:26px 0 0 clamp(20px,9vw,118px);max-width:34em;color:var(--muted);font-size:clamp(14px,1.8vw,18px)}
+.cta-row{margin-top:30px;padding-left:calc(clamp(20px,9vw,118px) + min(238px,28vw));display:flex;gap:14px;flex-wrap:wrap}
+.btn-cta{background:var(--accent);border:1px solid var(--accent-border);color:#1a1c1e;
+  padding:18px 34px;font-size:clamp(13px,2.2vw,16px);
+  clip-path:polygon(0 0,calc(100% - 16px) 0,100% 16px,100% 100%,16px 100%,0 calc(100% - 16px));
+  box-shadow:0 0 0 1px rgba(21,188,223,.35),0 10px 30px -12px rgba(15,163,194,.6)}
+.btn-cta:hover{background:var(--accent-hover);box-shadow:0 0 0 1px rgba(21,188,223,.5),0 14px 34px -12px rgba(15,163,194,.75)}
+.btn-cta::after{content:"";display:inline-block;width:22px;height:1px;background:#1a1c1e;margin-left:12px;vertical-align:middle}
+.btn-ghost{border:1px solid var(--line);color:var(--fg);padding:18px 30px;font-size:clamp(13px,2.2vw,16px);
+  clip-path:polygon(0 0,calc(100% - 16px) 0,100% 16px,100% 100%,16px 100%,0 calc(100% - 16px))}
+.meta{margin:18px 0 0 clamp(20px,9vw,118px);color:var(--muted);font-size:.9rem}
+/* ---- sections ---- */
+.band{background:linear-gradient(180deg,var(--bg) 0%,var(--card) 18%,var(--card) 100%)}
+section.block{padding:clamp(60px,10vw,140px) 0 clamp(30px,5vw,70px)}
+section.block h2{font-size:clamp(34px,6.5vw,72px);font-weight:700}
+section.block h2 .ind{display:block;padding-left:min(160px,18vw);color:var(--accent)}
+section.block .lead{max-width:520px;margin:32px 0 0 min(160px,18vw);color:var(--muted);font-size:clamp(14px,1.6vw,17px);line-height:1.7}
+section.block .btn-cta,section.block .btn-ghost{margin:36px 0 0 min(160px,18vw)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin:36px 0 0}
+.card{background:var(--bg);border:1px solid var(--line);border-left:6px solid var(--accent);padding:18px}
+.card h3{font-size:1rem;margin-bottom:8px}
+.card p{margin:0;color:var(--muted)}
+.mock{display:grid;grid-template-columns:1fr;gap:14px;margin-top:36px}
+@media(min-width:700px){.mock{grid-template-columns:1fr 1fr}}
+.tg,.slack{border:1px solid var(--line);padding:16px}
+.tg{background:var(--bubble)}
+.slack{background:var(--slack-bg)}
+.mock h3{font-size:.85rem;color:var(--muted);margin-bottom:10px}
+ol.steps,ul.needs{padding-left:1.2em;color:var(--muted)}
+ol.steps li,ul.needs li{margin-bottom:8px}
+ol.steps strong,li strong{color:var(--fg)}
+code{background:var(--bg);border:1px solid var(--line);padding:.15em .4em;font-size:.9em}
+footer{border-top:1px solid var(--line);margin-top:48px;padding:24px 0 40px;color:var(--muted);font-size:.95rem}
+footer a{text-decoration:underline}
+@media (max-width:700px){
+  .nav-links,.nav-cta{display:none}
+  label.menu-btn{display:flex}
+  #menu-toggle:checked ~ .mobile-menu{display:flex}
+  .hero::before{right:auto;left:-12%;width:119%;background:linear-gradient(180deg,rgba(21,188,223,.14),transparent 60%)}
+  .hero h1{font-size:clamp(34px,10vw,56px);padding:0 20px 28px}
+  .hero h1 .ind{padding-left:min(80px,20vw)}
+  .hero .sub,.meta{margin-left:20px;margin-right:20px}
+  .cta-row{padding-left:20px;padding-right:20px}
+  section.block h2{font-size:clamp(30px,9vw,48px)}
+  section.block h2 .ind,section.block .lead,section.block .btn-cta,section.block .btn-ghost{margin-left:20px}
+}
+@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<header class="hero">
+<div class="wrap">
+<nav class="nav" aria-label="Main">
+<a class="brand" href="#top" aria-label="StudyBuddy home"><span class="dot" aria-hidden="true"></span>studybuddy</a>
+<div class="nav-links"><a href="#top">HOME</a><a href="#about">ABOUT</a><a href="#setup">CONTACT US</a></div>
+<span class="nav-cta"><a class="btn btn-contact" href="#setup">Contact us</a></span>
+<label class="menu-btn" for="menu-toggle" aria-label="Toggle menu"><span></span><span></span><span></span></label>
+</nav>
+<input type="checkbox" id="menu-toggle" aria-hidden="true">
+<div class="mobile-menu"><a href="#top">HOME</a><a href="#about">ABOUT</a><a href="#setup">CONTACT US</a></div>
+<div class="hero-inner" id="top">
+<h1>
+<span class="row">YOUR</span>
+<span class="row">CANVAS</span>
+<span class="row">COURSES</span>
+<span class="row ind">IN</span>
+<span class="row ind">TELEGRAM</span>
+<span class="row ind accent">&amp; SLACK</span>
+</h1>
+<p class="sub">A morning digest, evening nudges, and a Saturday review of what you missed and what&apos;s coming. Free. Self-hosted. Yours.</p>
+<div class="cta-row">
+<a class="btn btn-cta" href="/downloads/studybuddy-latest.zip" download>Download v0.1.0</a>
+<a class="btn btn-ghost" href="#setup">Setup guide ↓</a>
+</div>
+<p class="meta">(.zip, 187 KB) · MIT licence · SHA-256 7f9fd90b739c6efde38abb45341732a7555aa329f9f87d4c49697bc412f6d69a · read-only access to Canvas</p>
+</div>
+</div>
+</header>
+
+<div class="band">
+<div class="wrap">
+
+<section class="block" id="about" aria-label="What you get">
+<h2>WHAT<span class="ind">YOU GET</span></h2>
+<p class="lead">Four briefings, zero noise. Empty sections vanish — a short message is the feature. All times America/Edmonton.</p>
+<div class="grid">
+<div class="card"><h3>☀️ Morning digest</h3><p>Due today, next 72 hours, exams, announcements. 07:00 daily.</p></div>
+<div class="card"><h3>⏰ Evening nudge</h3><p>One line, only when something is due in 24h. Otherwise silence. 20:00.</p></div>
+<div class="card"><h3>📅 Saturday review</h3><p>Missed → still open vs closed, tests ahead, workload, changes. 08:00.</p></div>
+<div class="card"><h3>☕ Saturday check-in</h3><p>What&apos;s still open + what changed since morning. 15:00.</p></div>
+</div>
+</section>
+
+<section class="block" aria-label="Preview">
+<h2>THE<span class="ind">PREVIEW</span></h2>
+<p class="lead">The fictional Saturday review, as it arrives on both channels. Pure markup — no images needed.</p>
+<div class="mock">
+<div class="tg"><h3>Telegram</h3>
+<p><strong>📅 Saturday review — Sep 26</strong></p>
+<p><strong>⚠️ Still to submit (3)</strong><br>DEMO 101 · Intro Demo<br>• Problem Set 3 — was due Wed 11:59 PM · 20 pts · open, locks Mon 11:59 PM<br>• Reading Quiz 2 📝 — was due Thu 9:00 AM · 10 pts · closed<br>DEMO 202 · Demo Studies<br>• Reflection 1 — was due Fri 5:00 PM · 5 pts · open</p>
+<p><strong>✅ Last 7 days: 6 on time · 2 late · 3 missed</strong></p>
+<p><strong>📝 Tests &amp; quizzes ahead</strong><br>• Tue Sep 29 — DEMO 101 Midterm (in 3 days)<br>• Thu Oct 1 — DEMO 202 Quiz 3</p>
+</div>
+<div class="slack"><h3>Slack</h3>
+<p><strong>📅 Saturday review — Sep 26</strong></p>
+<p><strong>⚠️ Still to submit</strong><br>• DEMO 101 — Problem Set 3 — was due Wed 11:59 PM · 20 pts · open<br>• DEMO 202 — Reflection 1 — was due Fri 5:00 PM · 5 pts · open</p>
+<p><strong>🗓 Next 7 days — 9 items · 145 pts (+30 vs last week) · heaviest: Thu</strong><br>Mon Sep 28: DEMO 101 Problem Set 4 (20 pts)</p>
+<p><strong>📣 DEMO 202 Assignment 4 due date moved to Fri Oct 2.</strong></p>
+</div>
+</div>
+</section>
+
+<section class="block" aria-label="How it works">
+<h2>HOW<span class="ind">IT WORKS</span></h2>
+<ol class="steps">
+<li><strong>Download</strong> the zip above. It contains everything — no binaries, no secrets.</li>
+<li><strong>Run the guided setup</strong> (~30 min, your own free accounts: Vercel, Supabase, Telegram, cron-job.org, optional Slack).</li>
+<li><strong>Get your messages</strong> — daily 07:00 + 20:00, Saturday 08:00 + 15:00 America/Edmonton.</li>
+</ol>
+</section>
+
+<section class="block" aria-label="What you need">
+<h2>WHAT<span class="ind">YOU NEED</span></h2>
+<ul class="needs">
+<li>Canvas account where you can create an access token</li>
+<li>Free accounts: Vercel, Supabase, Telegram, cron-job.org, (optional) Slack</li>
+<li>~30 minutes · $0/month</li>
+</ul>
+</section>
+
+<section class="block" aria-label="Privacy">
+<h2>PRIVATE<span class="ind">BY DESIGN</span></h2>
+<p class="lead">It runs entirely in your own accounts. Nothing is sent to us. This site sets no cookies and has no analytics or trackers. The Canvas token is read-only and never leaves your deployment.</p>
+</section>
+
+<section class="block" id="setup" aria-label="Setup guide">
+<h2>SETUP<span class="ind">GUIDE</span></h2>
+<ol class="steps">
+<li>Unzip, then <code>uv sync</code></li>
+<li><code>uv run canvasbuddy setup</code> — validates Canvas, Telegram via getUpdates, Slack test, Supabase pooler, timezone + slots, writes <code>.env</code> + <code>vercel.env</code>, runs migrations + first sync</li>
+<li>Deploy: <code>npm i -g vercel; vercel login; vercel link; vercel env</code> import from <code>vercel.env</code>; <code>vercel --prod</code></li>
+<li>Set Telegram webhook: <code>curl api.telegram.org/botTOKEN/setWebhook -d url=PROJECT.vercel.app/api/telegram -d secret_token=WEBHOOK_SECRET</code></li>
+<li>Create cron-job.org job: <code>GET PROJECT.vercel.app/api/cron</code> every 15 min, header <code>Authorization: Bearer CRON_SECRET</code></li>
+<li>Send <code>/testnotify review</code> to your bot. Full guide ships in the zip as SETUP.md.</li>
+</ol>
+</section>
+
+<section class="block" aria-label="FAQ">
+<h2>QUESTIONS<span class="ind">&amp; ANSWERS</span></h2>
+<p><strong>Will it work with my school?</strong> Needs Canvas + token creation allowed. Check your school&apos;s policy. UAlberta Canvas works.</p>
+<p><strong>Does it cost anything?</strong> No — Vercel Hobby, Supabase free, cron-job.org free, Slack webhook free.</p>
+<p><strong>Can it submit or change anything?</strong> No — read-only.</p>
+<p><strong>How do I update?</strong> Re-download, keep your <code>.env</code>.</p>
+<p><strong>Can I change the times?</strong> Yes — env vars DIGEST_SLOT etc.</p>
+<p><strong>Known limits?</strong> One person per deployment. Others self-host their own copy.</p>
+</section>
+
+<footer>
+<p>Built by Mir Sadat Bin Rakib · <a href="/LICENSE.txt">MIT License</a></p>
+<p>Canvas is a trademark of Instructure, Inc. This project is independent and not affiliated with or endorsed by Instructure.</p>
+</footer>
+</div>
+</div>
+</body>
+</html>

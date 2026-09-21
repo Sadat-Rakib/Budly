@@ -65,8 +65,26 @@ def included(path: Path) -> bool:
     return not any(fnmatch.fnmatch(rel.name, g) for g in EXCLUDE_GLOBS)
 
 
-def collect() -> list[Path]:
-    return sorted(p for p in ROOT.rglob("*") if p.is_file() and included(p))
+def collect(exclude_root: Path | None = None) -> list[Path]:
+    """Every bundled file, minus whatever directory the release is being written to.
+
+    Without the exclusion a rebuild into a served directory (``--out public``) picks up
+    the previous run's zip and writes it inside the new one, so the bundle grows by
+    itself on every build.
+    """
+    out: list[Path] = []
+    for p in ROOT.rglob("*"):
+        if not p.is_file() or not included(p):
+            continue
+        if exclude_root is not None:
+            try:
+                p.relative_to(exclude_root)
+            except ValueError:
+                pass
+            else:
+                continue
+        out.append(p)
+    return sorted(out)
 
 
 def scan(files: list[Path]) -> list[str]:
@@ -94,7 +112,7 @@ def main() -> int:
     shutil.rmtree(out, ignore_errors=True)
     dl.mkdir(parents=True)
 
-    files = collect()
+    files = collect(exclude_root=out.resolve())
     required = {"LICENSE", "README.md", "SETUP.md", ".env.example", "pyproject.toml"}
     missing = required - {str(f.relative_to(ROOT)) for f in files}
     if missing:

@@ -19,7 +19,7 @@ It works with any school that uses Canvas (tested on `https://canvas.ualberta.ca
 2. `uv sync`
 3. `uv run canvasbuddy setup` — guided wizard (~30 min, your own free accounts)
 4. `uv run alembic upgrade head && uv run canvasbuddy sync`
-5. Deploy to Vercel (bot) + Vercel (site) + cron-job.org — see `SETUP.md`.
+5. Deploy to Vercel (one project: bot + landing page) + cron-job.org — see `SETUP.md`.
 6. Send `/testnotify review` to your bot.
 
 ## Bot commands

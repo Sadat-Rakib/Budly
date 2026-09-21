@@ -13,3 +13,8 @@ site/dist/
 build/
 .coverage
 htmlcov/
+
+.vercel
+
+# video2code plugin scratch dir
+.v2c/

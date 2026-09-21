@@ -12,6 +12,9 @@ def make_settings(**overrides: object) -> Settings:
         "canvas_base_url": "https://canvas.example.edu",
         "canvas_token": "t",
         "database_url": "postgresql://u:p@localhost/db",
+        # A developer .env in the repo root must not leak into assertions: with
+        # env_ignore_empty, a monkeypatched "" is skipped and the file's value wins.
+        "_env_file": None,
     }
     defaults.update(overrides)
     return Settings(**defaults)  # type: ignore[arg-type]

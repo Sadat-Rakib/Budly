@@ -4,4 +4,10 @@ site
 scripts
 .venv
 .uv
+.vercel
 __pycache__
+*.py[cod]
+.env
+.env.*
+!.env.example
+vercel.env
