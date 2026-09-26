@@ -2,225 +2,633 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<title>StudyBuddy: Your Canvas courses, in Telegram and Slack</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>StudyBuddy — Your Canvas courses, in Telegram and Slack</title>
-<meta name="description" content="A morning digest, evening nudges, and a Saturday review of what you missed and what's coming. Free. Self-hosted. Yours.">
-<meta property="og:title" content="StudyBuddy — Your Canvas courses, in Telegram and Slack">
+<meta name="description" content="StudyBuddy watches your Canvas account and messages you on Telegram and Slack: morning digest, evening nudge, Saturday review. Free, self-hosted, read-only.">
+<meta property="og:title" content="StudyBuddy: Your Canvas courses, in Telegram and Slack">
 <meta property="og:description" content="Morning digest, evening nudges, Saturday review. Free. Self-hosted. Read-only Canvas.">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="StudyBuddy — Your Canvas courses, in Telegram and Slack">
+<meta name="twitter:title" content="StudyBuddy: Your Canvas courses, in Telegram and Slack">
 <meta name="twitter:description" content="Morning digest, evening nudges, Saturday review. Free. Self-hosted.">
 <link rel="icon" href="data:,📚">
+<script>
+(function () {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  var d = document.documentElement;
+  d.classList.add('motion-pending');
+  setTimeout(function () { d.classList.remove('motion-pending', 'entrance-run'); }, 2400);
+})();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-/* Targo-inspired, PRD-compliant: no external fonts, videos, or scripts. */
-:root{
-  --bg:#F2F1F0; --fg:#2b3033; --muted:#6b6f72; --nav:#3a3a3a;
-  --accent:#15BCDF; --accent-hover:#3fd0ef; --accent-border:#0fa3c2;
-  --card:#faf9f8; --line:#e2dedb; --bubble:#e8f7fb; --slack-bg:#f8f7f6;
-  --dark:#1a1c1e; --max:1100px;
-  --font:"Quantico","Arial Narrow",Arial,sans-serif;
+:root { color-scheme: light; }
+html { font-size: min(calc(95vw / 1374), calc(94vh / 666)); }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #f0f0f0;
+  color: #141414;
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  min-height: 100dvh;
+  overflow: hidden;
 }
-@media (prefers-color-scheme: dark){
-  :root{ --bg:#16181a; --fg:#f0ede6; --muted:#b8b3a8; --nav:#d8d4cc;
-    --card:#1e2124; --line:#33373b; --bubble:#12333c; --slack-bg:#1b1e20; }
+
+/* ------------------------------------------------------------------ stage */
+.stage {
+  width: 1374rem;
+  height: 666rem;
+  display: grid;
+  grid-template-columns: 339rem 627rem 388rem;
+  grid-template-rows: 149rem 343rem 156rem;
+  column-gap: 10rem;
+  row-gap: 9rem;
 }
-*{box-sizing:border-box}
-html{-webkit-text-size-adjust:100%}
-body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font);line-height:1.6}
-h1,h2,h3{text-transform:uppercase;letter-spacing:.01em;line-height:.98;margin:0}
-a{color:var(--nav);text-decoration:none}
-a:hover{color:#000}
-@media (prefers-color-scheme: dark){ a:hover{color:#fff} }
-a:focus-visible,.btn:focus-visible,label.menu-btn:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
-.wrap{max-width:var(--max);margin:0 auto;padding:0 clamp(20px,4vw,48px)}
-/* ---- nav ---- */
-.nav{display:flex;flex-wrap:wrap;align-items:center;gap:clamp(20px,5vw,56px);padding:clamp(20px,3vw,38px) 0}
-.brand{display:flex;align-items:center;gap:10px;font-size:clamp(22px,5vw,30px);letter-spacing:-.5px;color:var(--fg)}
-.brand .dot{width:38px;height:38px;border-radius:50%;background:var(--dark);position:relative;flex:none}
-.brand .dot::after{content:"";position:absolute;left:9px;top:15px;width:20px;height:8px;border-radius:50%;background:#fff;transform:rotate(-25deg)}
-@media (prefers-color-scheme: dark){ .brand .dot{background:var(--accent)} }
-.nav-links{display:flex;gap:34px;font-weight:700;font-size:clamp(12px,2.4vw,15px);letter-spacing:.06em;white-space:nowrap}
-.nav-cta{margin-left:auto}
-.btn{display:inline-block;text-transform:uppercase;font-weight:700;letter-spacing:.14em;text-decoration:none;cursor:pointer}
-.btn-contact{background:transparent;border:0;color:var(--fg);padding:14px 26px;
-  clip-path:polygon(0 0,calc(100% - 12px) 0,100% 12px,100% 100%,12px 100%,0 calc(100% - 12px))}
-.btn-contact:hover{background:rgba(127,127,127,.14)}
-#menu-toggle{display:none}
-label.menu-btn{display:none;flex-direction:column;gap:5px;padding:10px;cursor:pointer;margin-left:auto}
-label.menu-btn span{display:block;width:22px;height:2px;background:var(--fg)}
-.mobile-menu{display:none;flex-direction:column;gap:18px;padding:6px 0 18px;font-weight:700;letter-spacing:.06em}
-/* ---- hero ---- */
-.hero{position:relative;overflow:hidden;min-height:100svh;background:var(--bg)}
-.hero::before{content:"";position:absolute;top:0;right:-20%;width:99%;height:100%;pointer-events:none;
-  background:linear-gradient(115deg,transparent 55%,rgba(21,188,223,.16) 75%,rgba(21,188,223,.30) 100%)}
-.hero-inner{position:relative;padding:min(clamp(40px,9vw,120px),9vh) 0 min(clamp(36px,6vw,80px),7vh)}
-.hero h1{font-size:min(clamp(34px,7.6vw,80px),9.2vh);font-weight:700;padding:0 0 0 clamp(20px,9vw,118px)}
-.hero h1 .row{display:block}
-.hero h1 .ind{padding-left:min(238px,28vw)}
-.hero h1 .accent{color:var(--accent)}
-.hero .sub{margin:26px 0 0 clamp(20px,9vw,118px);max-width:34em;color:var(--muted);font-size:clamp(14px,1.8vw,18px)}
-.cta-row{margin-top:30px;padding-left:calc(clamp(20px,9vw,118px) + min(238px,28vw));display:flex;gap:14px;flex-wrap:wrap}
-.btn-cta{background:var(--accent);border:1px solid var(--accent-border);color:#1a1c1e;
-  padding:18px 34px;font-size:clamp(13px,2.2vw,16px);
-  clip-path:polygon(0 0,calc(100% - 16px) 0,100% 16px,100% 100%,16px 100%,0 calc(100% - 16px));
-  box-shadow:0 0 0 1px rgba(21,188,223,.35),0 10px 30px -12px rgba(15,163,194,.6)}
-.btn-cta:hover{background:var(--accent-hover);box-shadow:0 0 0 1px rgba(21,188,223,.5),0 14px 34px -12px rgba(15,163,194,.75)}
-.btn-cta::after{content:"";display:inline-block;width:22px;height:1px;background:#1a1c1e;margin-left:12px;vertical-align:middle}
-.btn-ghost{border:1px solid var(--line);color:var(--fg);padding:18px 30px;font-size:clamp(13px,2.2vw,16px);
-  clip-path:polygon(0 0,calc(100% - 16px) 0,100% 16px,100% 100%,16px 100%,0 calc(100% - 16px))}
-.meta{margin:18px 0 0 clamp(20px,9vw,118px);color:var(--muted);font-size:.9rem}
-/* ---- sections ---- */
-.band{background:linear-gradient(180deg,var(--bg) 0%,var(--card) 18%,var(--card) 100%)}
-section.block{padding:clamp(60px,10vw,140px) 0 clamp(30px,5vw,70px)}
-section.block h2{font-size:clamp(34px,6.5vw,72px);font-weight:700}
-section.block h2 .ind{display:block;padding-left:min(160px,18vw);color:var(--accent)}
-section.block .lead{max-width:520px;margin:32px 0 0 min(160px,18vw);color:var(--muted);font-size:clamp(14px,1.6vw,17px);line-height:1.7}
-section.block .btn-cta,section.block .btn-ghost{margin:36px 0 0 min(160px,18vw)}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin:36px 0 0}
-.card{background:var(--bg);border:1px solid var(--line);border-left:6px solid var(--accent);padding:18px}
-.card h3{font-size:1rem;margin-bottom:8px}
-.card p{margin:0;color:var(--muted)}
-.mock{display:grid;grid-template-columns:1fr;gap:14px;margin-top:36px}
-@media(min-width:700px){.mock{grid-template-columns:1fr 1fr}}
-.tg,.slack{border:1px solid var(--line);padding:16px}
-.tg{background:var(--bubble)}
-.slack{background:var(--slack-bg)}
-.mock h3{font-size:.85rem;color:var(--muted);margin-bottom:10px}
-ol.steps,ul.needs{padding-left:1.2em;color:var(--muted)}
-ol.steps li,ul.needs li{margin-bottom:8px}
-ol.steps strong,li strong{color:var(--fg)}
-code{background:var(--bg);border:1px solid var(--line);padding:.15em .4em;font-size:.9em}
-footer{border-top:1px solid var(--line);margin-top:48px;padding:24px 0 40px;color:var(--muted);font-size:.95rem}
-footer a{text-decoration:underline}
-@media (max-width:700px){
-  .nav-links,.nav-cta{display:none}
-  label.menu-btn{display:flex}
-  #menu-toggle:checked ~ .mobile-menu{display:flex}
-  .hero::before{right:auto;left:-12%;width:119%;background:linear-gradient(180deg,rgba(21,188,223,.14),transparent 60%)}
-  .hero h1{font-size:clamp(34px,10vw,56px);padding:0 20px 28px}
-  .hero h1 .ind{padding-left:min(80px,20vw)}
-  .hero .sub,.meta{margin-left:20px;margin-right:20px}
-  .cta-row{padding-left:20px;padding-right:20px}
-  section.block h2{font-size:clamp(30px,9vw,48px)}
-  section.block h2 .ind,section.block .lead,section.block .btn-cta,section.block .btn-ghost{margin-left:20px}
+.notif    { grid-column: 1; grid-row: 1; }
+.connect  { grid-column: 1; grid-row: 2 / span 2; }
+.automate { grid-column: 2; grid-row: 1 / span 2; }
+.insights { grid-column: 3; grid-row: 1 / span 2; }
+.search   { grid-column: 2 / span 2; grid-row: 3; }
+
+.card {
+  border-radius: 22rem;
+  border: 1.6rem solid rgba(255,255,255,.92);
+  overflow: hidden;
+  box-shadow: 0 2rem 16rem rgba(24,30,45,.045);
+  position: relative;
 }
-@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+
+/* ------------------------------------------------------- card 1 · digest */
+.notif {
+  background:
+    radial-gradient(120% 140% at 92% 100%, rgba(255,236,246,.95) 0%, rgba(255,236,246,0) 62%),
+    linear-gradient(135deg, #f9d9e9 0%, #fbdfec 55%, #fce6f1 100%);
+  padding: 37rem 12rem 0 11rem;
+}
+.toast-wrap { position: relative; height: 70rem; }
+.toast-ledge {
+  position: absolute; left: 24rem; right: 20rem; top: 55rem; height: 23rem;
+  border-radius: 14rem;
+  background: linear-gradient(100deg, #e6e6e6 0%, #e6e3e2 42%, #e5d6d6 74%, #e4cdcf 100%);
+  box-shadow: 0 3rem 9rem rgba(120,80,100,.09);
+}
+.toast {
+  position: absolute; inset: 0; height: 70rem; border-radius: 16rem;
+  background: linear-gradient(105deg, #ffffff 34%, #fdeee5 78%, #fce8dd 100%);
+  box-shadow: 0 3rem 10rem rgba(122,86,106,.10);
+  display: flex; align-items: center;
+  padding: 0 12rem 0 13rem; gap: 11rem;
+}
+.toast > svg { flex: none; }
+.toast-copy { min-width: 0; }
+.toast-copy strong {
+  display: block;
+  font-size: 11.2rem; font-weight: 800; letter-spacing: -.012em; line-height: 1.1;
+  color: #0d0d0d;
+}
+.toast-copy span {
+  display: block;
+  font-size: 10rem; font-weight: 400; line-height: 1.28; letter-spacing: -.005em;
+  color: #2b2b2b; max-width: 118rem; margin-top: 3.6rem;
+}
+.toast-time {
+  align-self: flex-start; margin-top: 12rem; flex: none;
+  font-size: 7.4rem; font-weight: 500; letter-spacing: .005em; color: #8b8489;
+}
+
+/* ------------------------------------------------------ card 2 · connect */
+.connect {
+  background: linear-gradient(180deg, #fcfdfd 0%, #f4f7f9 30%, #e2ebef 66%, #cedce4 100%);
+  padding: 32rem 0 0 20rem;
+}
+.connect h2 {
+  font-size: 28rem; font-weight: 800; line-height: 1.1; letter-spacing: -.028em;
+  color: #0c0c0c;
+}
+.connect .sub {
+  margin-top: 14rem;
+  font-size: 17rem; font-weight: 400; line-height: 1.3; letter-spacing: -.013em;
+  color: #1c1c1c;
+}
+.chips {
+  position: absolute; left: 11rem; right: 16rem; bottom: 13rem; z-index: 2;
+  display: flex; flex-direction: column; gap: 8rem;
+}
+.chip-row { display: flex; gap: 14rem; }
+.chips .r2 { padding-left: 10rem; }
+.chip {
+  height: 42rem; display: inline-flex; align-items: center; gap: 10rem;
+  padding: 0 17rem; border-radius: 999rem;
+  background: linear-gradient(180deg, rgba(247,253,255,.97) 0%, rgba(240,250,254,.93) 100%);
+  box-shadow: 0 0 0 3rem rgba(0,0,0,.047);
+  backdrop-filter: blur(7rem);
+  font-size: 18rem; font-weight: 500; letter-spacing: -.018em; color: #131313;
+  white-space: nowrap;
+}
+.chip svg { flex: none; }
+.chip-slack {
+  position: absolute; right: 6rem; bottom: 124rem; z-index: 3;
+  transform: rotate(-20deg);
+  box-shadow: 0 0 0 3.2rem rgba(0,0,0,.052);
+}
+
+/* ----------------------------------------------------- card 3 · automate */
+.automate {
+  background:
+    radial-gradient(90% 70% at 6% 0%, rgba(226,236,200,.9) 0%, rgba(226,236,200,0) 70%),
+    linear-gradient(168deg, #e2ebc9 0%, #e9f0c4 48%, #f0f4b8 78%, #f3f5b0 100%);
+}
+.automate .copy { position: relative; z-index: 3; padding: 37rem 0 0 45rem; }
+.automate h1 {
+  font-size: 35rem; font-weight: 800; line-height: 1.43; letter-spacing: -.03em;
+  color: #15201a;
+}
+.automate h1 .g { color: #5f8b3e; }
+.automate .sub {
+  margin-top: 13rem;
+  font-size: 17rem; font-weight: 400; line-height: 1.3; letter-spacing: -.014em;
+  color: #1e2a1b;
+  max-width: 470rem;
+}
+.illo { position: absolute; inset: 0; z-index: 2; }
+.win {
+  position: absolute;
+  border: 3rem solid #fff;
+  border-radius: 11rem;
+  overflow: hidden;
+  box-shadow: 0 12rem 28rem rgba(64,74,44,.16);
+}
+.win-bar {
+  height: 13.4rem; background: #242424; flex: none;
+  display: flex; align-items: center; gap: 4.6rem; padding-left: 4.9rem;
+}
+.win-bar i {
+  width: 6rem; height: 6rem; border-radius: 50%;
+  background: linear-gradient(150deg, #fff 0%, #f6f6f6 50%, #dcdcdc 100%);
+}
+.win-body { display: flex; height: calc(100% - 13.4rem); }
+.win-strip { height: 100%; flex: none; }
+.win-back {
+  left: 121.2rem; top: 245.2rem; width: 324rem; height: 250rem;
+  transform: rotate(-7.02deg);
+}
+.win-back .win-body { background: #eaefcd; }
+.win-back .win-strip { width: 23.7%; background: #bfd0ac; }
+.win-front {
+  left: 180.4rem; top: 283.3rem; width: 322rem; height: 250rem;
+  transform: rotate(4.23deg);
+  border-bottom: 0;
+  border-bottom-left-radius: 0; border-bottom-right-radius: 0;
+  box-shadow: 0 14rem 32rem rgba(64,74,44,.18);
+}
+.win-front .win-body { background: #f9edfb; }
+.win-front .win-strip { width: 16%; background: #e8d6fb; }
+.pill-wf {
+  position: absolute; left: 395rem; top: 349rem; height: 30rem; z-index: 3;
+  display: flex; align-items: center; gap: 7rem;
+  padding: 0 14rem 0 6rem; border-radius: 999rem; background: #fff;
+  box-shadow: 0 0 0 2.8rem rgba(0,0,0,.045);
+  transform: rotate(-1.2deg);
+  font-size: 11.5rem; font-weight: 600; letter-spacing: -.014em; color: #151515;
+}
+.pill-wf .tick {
+  width: 20rem; height: 20rem; border-radius: 50%; flex: none;
+  display: flex; align-items: center; justify-content: center;
+  background:
+    radial-gradient(120% 120% at 28% 22%, rgba(255,255,255,.95) 0%, rgba(255,255,255,0) 55%),
+    linear-gradient(145deg, #e6f3df 0%, #cfe0bd 47%, #b9cfa5 100%);
+}
+.pill-ai {
+  position: absolute; left: 68rem; top: 404rem; width: 144rem; height: 52rem; z-index: 3;
+  border-radius: 10rem; background: #fff;
+  box-shadow: 0 0 0 2.8rem rgba(0,0,0,.045);
+  display: flex; align-items: center; gap: 9rem; padding: 0 16rem;
+  transform: rotate(-1deg);
+}
+.pill-ai .lines { display: flex; flex-direction: column; gap: 8rem; }
+.pill-ai .lines i { height: 6.5rem; border-radius: 99rem; background: #d8d8d7; display: block; }
+.pill-ai .lines i:first-child { width: 66rem; }
+.pill-ai .lines i:last-child { width: 46rem; }
+.pill-ai > svg { flex: none; }
+.cursor { position: absolute; left: 490rem; top: 454rem; z-index: 4; }
+
+/* ----------------------------------------------------- card 4 · insights */
+.insights {
+  background:
+    radial-gradient(115% 70% at 22% 0%, #fdf2e5 0%, rgba(253,242,229,0) 68%),
+    linear-gradient(180deg, #f9f1e8 0%, #f7efe6 100%);
+  padding: 29rem 25rem 23rem 21rem;
+  display: flex; flex-direction: column;
+}
+.tag {
+  height: 31rem; display: inline-flex; align-items: center; align-self: flex-start;
+  padding: 0 17rem; border-radius: 999rem; margin-left: 4rem;
+  background: linear-gradient(100deg, #ffffff 18%, #fdeadb 100%);
+  border: 1.2rem solid rgba(255,255,255,.9);
+  box-shadow: 0 3rem 9rem rgba(160,120,80,.09);
+  font-size: 12rem; font-weight: 700; letter-spacing: -.01em; color: #111;
+}
+.insights h2 {
+  margin-top: 22rem;
+  font-size: 37rem; font-weight: 800; letter-spacing: -.035em; line-height: 1;
+  color: #0b0b0b;
+}
+.insights .sub {
+  margin-top: 12rem;
+  font-size: 14.5rem; font-weight: 400; letter-spacing: -.012em; color: #1d1d1d;
+}
+.chart { margin-top: auto; height: 294rem; display: flex; align-items: flex-end; gap: 13rem; }
+.col {
+  flex: 1; border-radius: 7rem; background: #e9e3da; padding-top: 9rem;
+  display: flex; flex-direction: column; align-items: center;
+}
+.col b { font-size: 13rem; font-weight: 500; color: #a1978a; }
+.col.sun {
+  background: linear-gradient(180deg, #f2b705 0%, #e7b208 26%, #a8a422 52%, #6a8f33 76%, #3d7a3e 100%);
+  box-shadow: 0 4rem 12rem rgba(150,120,20,.20);
+}
+.col.sun b { color: #fff; font-weight: 600; }
+.days { display: flex; gap: 13rem; margin-top: 10rem; }
+.days span {
+  flex: 1; text-align: center;
+  font-size: 10.4rem; font-weight: 500; letter-spacing: .05em; color: #a79c8e;
+}
+.days .sun { color: #7c7460; font-weight: 700; }
+.bar-col-43  { height: 43.2rem; }
+.bar-col-81  { height: 80.9rem; }
+.bar-col-132 { height: 131.7rem; }
+.bar-col-166 { height: 165.5rem; }
+.bar-col-203 { height: 203.2rem; }
+.bar-col-235 { height: 235.2rem; }
+.bar-col-265 { height: 265rem; }
+
+/* ------------------------------------------------------- card 5 · search */
+.search {
+  background: linear-gradient(103deg, #eae9f5 0%, #e2e0f1 34%, #cfcdea 72%, #c2c0e6 100%);
+  display: flex; align-items: center;
+  padding-left: 46rem; padding-right: 25rem;
+}
+.search h2 {
+  font-size: 23rem; font-weight: 800; line-height: 1.39; letter-spacing: -.028em;
+  color: #0d0d10;
+}
+.bar-search {
+  margin-left: auto; flex: none;
+  width: 612rem; height: 64rem; border-radius: 999rem; background: #fff;
+  box-shadow: 0 4rem 14rem rgba(70,66,120,.10);
+  display: flex; align-items: center;
+  padding: 0 22rem 0 10rem; gap: 16rem;
+  text-decoration: none;
+}
+.bar-search .mag {
+  width: 44rem; height: 44rem; border-radius: 50%; background: #f1f1f5; flex: none;
+  display: flex; align-items: center; justify-content: center;
+}
+.bar-search .q {
+  font-size: 16.5rem; font-weight: 400; letter-spacing: -.015em; color: #8c8c99;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.bar-search svg.dl { flex: none; }
+@media (max-width: 1040px) { .bar-search .q-extra { display: none; } }
+
+/* ------------------------------------------------------ entrance: pending */
+.motion-pending .card { opacity: 0; visibility: hidden; }
+
+/* -------------------------------------------------- entrance: choreography */
+.entrance-run .card, .entrance-run .toast-wrap, .entrance-run .chip-row,
+.entrance-run .chip-slack, .entrance-run .win-back, .entrance-run .win-front,
+.entrance-run .pill-ai, .entrance-run .pill-wf, .entrance-run .cursor,
+.entrance-run .tag, .entrance-run .chart, .entrance-run .bar-search {
+  will-change: opacity, translate, scale, clip-path;
+  animation-fill-mode: backwards;
+}
+@keyframes panel-settle {
+  from { opacity: 0; translate: 0 12rem; scale: .988; clip-path: inset(3% round 22rem); }
+  62%  { opacity: 1; }
+  to   { opacity: 1; translate: 0 0; scale: 1; clip-path: inset(0% round 22rem); }
+}
+@keyframes type-unmask {
+  from { opacity: 0; translate: 0 16rem; clip-path: inset(0 0 96% 0); }
+  to   { opacity: 1; translate: 0 0; clip-path: inset(0 0 -2% 0); }
+}
+@keyframes content-rise {
+  from { opacity: 0; translate: 0 9rem; }
+  to   { opacity: 1; translate: 0 0; }
+}
+@keyframes interface-settle {
+  from { opacity: 0; translate: 0 16rem; scale: .975; }
+  to   { opacity: 1; translate: 0 0; scale: 1; }
+}
+@keyframes detail-settle {
+  from { opacity: 0; translate: 0 8rem; scale: .97; }
+  to   { opacity: 1; translate: 0 0; scale: 1; }
+}
+@keyframes toast-arrive {
+  from { opacity: 0; translate: 0 10rem; scale: .982; }
+  to   { opacity: 1; translate: 0 0; scale: 1; }
+}
+@keyframes chip-row-arrive {
+  from { opacity: 0; translate: 0 11rem; }
+  to   { opacity: 1; translate: 0 0; }
+}
+@keyframes chart-unmask {
+  from { opacity: 0; translate: 0 10rem; clip-path: inset(100% 0 0 0); }
+  to   { opacity: 1; translate: 0 0; clip-path: inset(0 0 0 0); }
+}
+@keyframes search-resolve {
+  from { opacity: 0; translate: 12rem 0; scale: .975 1; }
+  to   { opacity: 1; translate: 0 0; scale: 1 1; }
+}
+.entrance-run .automate      { animation: panel-settle .82s cubic-bezier(.16,1,.3,1) .04s; }
+.entrance-run .notif         { animation: panel-settle .66s cubic-bezier(.16,1,.3,1) .10s; }
+.entrance-run .insights      { animation: panel-settle .74s cubic-bezier(.16,1,.3,1) .14s; }
+.entrance-run .connect       { animation: panel-settle .74s cubic-bezier(.16,1,.3,1) .20s; }
+.entrance-run .search        { animation: panel-settle .68s cubic-bezier(.16,1,.3,1) .28s; }
+.entrance-run .automate h1   { animation: type-unmask .78s cubic-bezier(.22,1,.36,1) .20s; }
+.entrance-run .automate .sub { animation: content-rise .54s cubic-bezier(.16,1,.3,1) .48s; }
+.entrance-run .win-back      { animation: interface-settle .84s cubic-bezier(.16,1,.3,1) .42s; }
+.entrance-run .win-front     { animation: interface-settle .94s cubic-bezier(.16,1,.3,1) .50s; }
+.entrance-run .pill-ai       { animation: detail-settle .60s cubic-bezier(.16,1,.3,1) .72s; }
+.entrance-run .pill-wf       { animation: detail-settle .58s cubic-bezier(.16,1,.3,1) .78s; }
+.entrance-run .cursor        { animation: detail-settle .54s cubic-bezier(.16,1,.3,1) .96s; }
+.entrance-run .toast-wrap    { animation: toast-arrive .62s cubic-bezier(.16,1,.3,1) .38s; }
+.entrance-run .connect h2    { animation: type-unmask .64s cubic-bezier(.22,1,.36,1) .54s; }
+.entrance-run .connect .sub  { animation: content-rise .48s cubic-bezier(.16,1,.3,1) .73s; }
+.entrance-run .chip-row.r1   { animation: chip-row-arrive .62s cubic-bezier(.16,1,.3,1) .86s; }
+.entrance-run .chip-row.r2   { animation: chip-row-arrive .62s cubic-bezier(.16,1,.3,1) .91s; }
+.entrance-run .chip-row.r3   { animation: chip-row-arrive .62s cubic-bezier(.16,1,.3,1) .96s; }
+.entrance-run .chip-slack    { animation: detail-settle .58s cubic-bezier(.16,1,.3,1) 1.02s; }
+.entrance-run .insights .tag { animation: content-rise .46s cubic-bezier(.16,1,.3,1) .44s; }
+.entrance-run .insights h2   { animation: type-unmask .62s cubic-bezier(.22,1,.36,1) .56s; }
+.entrance-run .insights .sub { animation: content-rise .44s cubic-bezier(.16,1,.3,1) .75s; }
+.entrance-run .chart         { animation: chart-unmask .86s cubic-bezier(.16,1,.3,1) .72s; }
+.entrance-run .search h2     { animation: type-unmask .56s cubic-bezier(.22,1,.36,1) .72s; }
+.entrance-run .bar-search    { animation: search-resolve .70s cubic-bezier(.16,1,.3,1) .88s; transform-origin: right center; }
+
+/* --------------------------------------------------------------- tablet */
+@media (min-width: 701px) and (max-width: 1040px) and (max-aspect-ratio: 3/2) {
+  html { font-size: min(calc(95vw / 1025), calc(94vh / 918)); }
+  .stage {
+    width: 1025rem; height: 918rem;
+    grid-template-columns: 627rem 388rem;
+    grid-template-rows: 505rem 194rem 201rem;
+  }
+  .automate { grid-column: 1; grid-row: 1; }
+  .notif    { grid-column: 1; grid-row: 2; }
+  .search   { grid-column: 1; grid-row: 3; }
+  .insights { grid-column: 2; grid-row: 1; }
+  .connect  { grid-column: 2; grid-row: 2 / span 2; }
+  .notif { padding-top: 32rem; }
+  .toast-wrap { width: 380rem; max-width: calc(100% - 24rem); margin: 0 auto; }
+  .toast-copy strong { font-size: 12.4rem; }
+  .toast-copy span { font-size: 11rem; }
+  .toast-time { font-size: 8.4rem; }
+  .tag { font-size: 13rem; }
+  .search { flex-direction: column; align-items: flex-start; justify-content: center; gap: 0; padding: 0 25rem 0 46rem; }
+  .search h2 { font-size: 25rem; }
+  .bar-search { margin-left: 0; width: 100%; margin-top: 22rem; }
+  .bar-search .q { font-size: 17.5rem; }
+}
+
+/* --------------------------------------------------------------- mobile */
+@media (max-width: 700px) {
+  html { font-size: calc((min(100vw, 560px) - 30px) / 375); }
+  body { display: block; overflow-x: hidden; overflow-y: auto; padding: 15px 0; }
+  .stage {
+    width: 375rem; height: auto;
+    grid-template-columns: 375rem;
+    grid-template-rows: none;
+    row-gap: 13rem;
+  }
+  .notif, .connect, .automate, .insights, .search { grid-column: 1; grid-row: auto; }
+  .notif    { height: 149rem; }
+  .connect  { height: 508rem; }
+  .automate { height: 298rem; }
+  .insights { height: 500rem; }
+  .search   { height: auto; flex-direction: column; align-items: stretch; gap: 18rem; padding: 24rem 20rem; }
+  .search h2 { font-size: 21rem; }
+  .automate .copy { padding: 24rem 0 0 22rem; }
+  .automate h1 { font-size: 24rem; max-width: 300rem; }
+  .automate .sub { font-size: 13rem; max-width: 280rem; }
+  .illo { scale: .5981; transform-origin: 0 0; }
+  .bar-search { margin-left: 0; width: 100%; height: 58rem; }
+}
+/* mobile: insights/search never hide and never animate */
+@media (max-width: 700px) {
+  .motion-pending .insights, .motion-pending .search { opacity: 1; visibility: visible; }
+  .entrance-run .insights, .entrance-run .search,
+  .entrance-run .insights .tag, .entrance-run .insights h2, .entrance-run .insights .sub,
+  .entrance-run .chart, .entrance-run .search h2, .entrance-run .bar-search { animation: none; }
+}
+
+/* ------------------------------------------------------- reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .motion-pending .card { opacity: 1; visibility: visible; }
+  .entrance-run .card, .entrance-run .toast-wrap, .entrance-run .chip-row,
+  .entrance-run .chip-slack, .entrance-run .win-back, .entrance-run .win-front,
+  .entrance-run .pill-ai, .entrance-run .pill-wf, .entrance-run .cursor,
+  .entrance-run .tag, .entrance-run .chart, .entrance-run .bar-search { animation: none !important; }
+}
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
 </style>
 </head>
 <body>
-<header class="hero">
-<div class="wrap">
-<nav class="nav" aria-label="Main">
-<a class="brand" href="#top" aria-label="StudyBuddy home"><span class="dot" aria-hidden="true"></span>studybuddy</a>
-<div class="nav-links"><a href="#top">HOME</a><a href="#about">ABOUT</a><a href="#setup">CONTACT US</a></div>
-<span class="nav-cta"><a class="btn btn-contact" href="#setup">Contact us</a></span>
-<label class="menu-btn" for="menu-toggle" aria-label="Toggle menu"><span></span><span></span><span></span></label>
-</nav>
-<input type="checkbox" id="menu-toggle" aria-hidden="true">
-<div class="mobile-menu"><a href="#top">HOME</a><a href="#about">ABOUT</a><a href="#setup">CONTACT US</a></div>
-<div class="hero-inner" id="top">
-<h1>
-<span class="row">YOUR</span>
-<span class="row">CANVAS</span>
-<span class="row">COURSES</span>
-<span class="row ind">IN</span>
-<span class="row ind">TELEGRAM</span>
-<span class="row ind accent">&amp; SLACK</span>
-</h1>
-<p class="sub">A morning digest, evening nudges, and a Saturday review of what you missed and what&apos;s coming. Free. Self-hosted. Yours.</p>
-<div class="cta-row">
-<a class="btn btn-cta" href="/downloads/studybuddy-latest.zip" download>Download v{{VERSION}}</a>
-<a class="btn btn-ghost" href="#setup">Setup guide ↓</a>
-</div>
-<p class="meta">(.zip, {{SIZE}}) · MIT licence · SHA-256 {{SHA256}} · read-only access to Canvas</p>
-</div>
-</div>
-</header>
 
-<div class="band">
-<div class="wrap">
+<main class="stage" role="main" aria-label="StudyBuddy feature overview">
 
-<section class="block" id="about" aria-label="What you get">
-<h2>WHAT<span class="ind">YOU GET</span></h2>
-<p class="lead">Four briefings, zero noise. Empty sections vanish — a short message is the feature. All times America/Edmonton.</p>
-<div class="grid">
-<div class="card"><h3>☀️ Morning digest</h3><p>Due today, next 72 hours, exams, announcements. 07:00 daily.</p></div>
-<div class="card"><h3>⏰ Evening nudge</h3><p>One line, only when something is due in 24h. Otherwise silence. 20:00.</p></div>
-<div class="card"><h3>📅 Saturday review</h3><p>Missed → still open vs closed, tests ahead, workload, changes. 08:00.</p></div>
-<div class="card"><h3>☕ Saturday check-in</h3><p>What&apos;s still open + what changed since morning. 15:00.</p></div>
-</div>
-</section>
+  <!-- CARD 1 · morning digest toast -->
+  <section class="card notif" aria-label="Morning digest notification">
+    <div class="toast-wrap">
+      <div class="toast-ledge"></div>
+      <div class="toast">
+        <svg width="27" height="27" viewBox="0 0 24 24" aria-hidden="true">
+          <defs>
+            <mask id="star-hole">
+              <rect width="24" height="24" fill="#fff"/>
+              <path d="M12 1.5c.55 5.6 4.35 9.4 9.95 9.95-5.6.55-9.4 4.35-9.95 9.95-.55-5.6-4.35-9.4-9.95-9.95 5.6-.55 9.4-4.35 9.95-9.95z" fill="#000"/>
+            </mask>
+          </defs>
+          <circle cx="12" cy="12" r="12" fill="#0d0d0d" mask="url(#star-hole)"/>
+          <path d="M12 6.9c.33 3.36 2.61 5.64 5.97 5.97-3.36.33-5.64 2.61-5.97 5.97-.33-3.36-2.61-5.64-5.97-5.97 3.36-.33 5.64-2.61 5.97-5.97z" fill="#0d0d0d"/>
+        </svg>
+        <div class="toast-copy">
+          <strong>Digest sent!</strong>
+          <span>3 due this week · AUMAT quiz Oct 1 · 2 new posts</span>
+        </div>
+        <span class="toast-time">7:00 AM</span>
+      </div>
+    </div>
+  </section>
 
-<section class="block" aria-label="Preview">
-<h2>THE<span class="ind">PREVIEW</span></h2>
-<p class="lead">The fictional Saturday review, as it arrives on both channels. Pure markup — no images needed.</p>
-<div class="mock">
-<div class="tg"><h3>Telegram</h3>
-<p><strong>📅 Saturday review — Sep 26</strong></p>
-<p><strong>⚠️ Still to submit (3)</strong><br>DEMO 101 · Intro Demo<br>• Problem Set 3 — was due Wed 11:59 PM · 20 pts · open, locks Mon 11:59 PM<br>• Reading Quiz 2 📝 — was due Thu 9:00 AM · 10 pts · closed<br>DEMO 202 · Demo Studies<br>• Reflection 1 — was due Fri 5:00 PM · 5 pts · open</p>
-<p><strong>✅ Last 7 days: 6 on time · 2 late · 3 missed</strong></p>
-<p><strong>📝 Tests &amp; quizzes ahead</strong><br>• Tue Sep 29 — DEMO 101 Midterm (in 3 days)<br>• Thu Oct 1 — DEMO 202 Quiz 3</p>
-</div>
-<div class="slack"><h3>Slack</h3>
-<p><strong>📅 Saturday review — Sep 26</strong></p>
-<p><strong>⚠️ Still to submit</strong><br>• DEMO 101 — Problem Set 3 — was due Wed 11:59 PM · 20 pts · open<br>• DEMO 202 — Reflection 1 — was due Fri 5:00 PM · 5 pts · open</p>
-<p><strong>🗓 Next 7 days — 9 items · 145 pts (+30 vs last week) · heaviest: Thu</strong><br>Mon Sep 28: DEMO 101 Problem Set 4 (20 pts)</p>
-<p><strong>📣 DEMO 202 Assignment 4 due date moved to Fri Oct 2.</strong></p>
-</div>
-</div>
-</section>
+  <!-- CARD 2 · connect your stack -->
+  <section class="card connect" aria-label="Your stack">
+    <h2>Connect your<br>courses now.</h2>
+    <p class="sub">Read-only, self-hosted, $0/month to run.</p>
+    <div class="chips">
+      <div class="chip-row r1">
+        <span class="chip">Canvas LMS
+          <svg width="21" height="21" viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="12" fill="#E4243B"/>
+            <path d="M12 6.2 3.2 10.3 12 14.4l8.8-4.1L12 6.2z" fill="#fff"/>
+            <path d="M7 13.4v2.5c0 1.3 2.2 2.4 5 2.4s5-1.1 5-2.4v-2.5l-5 2.3-5-2.3z" fill="#fff" opacity=".92"/>
+            <rect x="19.1" y="10.3" width=".9" height="4.8" rx=".45" fill="#fff"/>
+          </svg>
+        </span>
+      </div>
+      <div class="chip-row r2">
+        <span class="chip">Telegram
+          <svg width="21" height="21" viewBox="0 0 24 24" aria-hidden="true">
+            <defs>
+              <linearGradient id="tgw" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#2AABEE"/><stop offset="1" stop-color="#229ED9"/>
+              </linearGradient>
+            </defs>
+            <circle cx="12" cy="12" r="12" fill="url(#tgw)"/>
+            <path fill="#fff" d="m9.417 15.181-.397 5.584c.568 0 .818-.244 1.116-.537l2.682-2.57 5.558 4.072c1.02.564 1.746.272 2.013-.941l3.647-17.06c.333-1.48-.534-2.06-1.51-1.7L1.6 10.086c-1.45.564-1.428 1.374-.246 1.74l4.35 1.358 10.09-6.36c.475-.316.908-.141.553.175z"/>
+          </svg>
+        </span>
+        <span class="chip">GitHub
+          <svg width="21" height="21" viewBox="0 0 24 24" aria-hidden="true">
+            <path fill="#0d0d0d" d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/>
+          </svg>
+        </span>
+      </div>
+      <div class="chip-row r3">
+        <span class="chip">Supabase
+          <svg width="21" height="21" viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="1" y="1" width="22" height="22" rx="5.5" fill="#3ECF8E"/>
+            <path d="M13.4 4.2 5.4 13.1h4.9l-1 6.7 8.3-9.2h-5l.8-6.4z" fill="#fff"/>
+          </svg>
+        </span>
+        <span class="chip">Vercel
+          <svg width="21" height="21" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 3.4 22.2 20.6H1.8L12 3.4z" fill="#0d0d0d"/>
+          </svg>
+        </span>
+      </div>
+    </div>
+    <span class="chip chip-slack">Slack
+      <svg width="21" height="21" viewBox="0 0 122.8 122.8" aria-hidden="true">
+        <path d="M25.8 77.6c0 7.1-5.8 12.9-12.9 12.9S0 84.7 0 77.6s5.8-12.9 12.9-12.9h12.9v12.9zM32.3 77.6c0-7.1 5.8-12.9 12.9-12.9s12.9 5.8 12.9 12.9v32.3c0 7.1-5.8 12.9-12.9 12.9s-12.9-5.8-12.9-12.9V77.6z" fill="#E01E5A"/>
+        <path d="M45.2 25.8c-7.1 0-12.9-5.8-12.9-12.9S38.1 0 45.2 0s12.9 5.8 12.9 12.9v12.9H45.2zM45.2 32.3c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9H12.9C5.8 58.1 0 52.3 0 45.2s5.8-12.9 12.9-12.9h32.3z" fill="#36C5F0"/>
+        <path d="M97 45.2c0-7.1 5.8-12.9 12.9-12.9s12.9 5.8 12.9 12.9-5.8 12.9-12.9 12.9H97V45.2zM90.5 45.2c0 7.1-5.8 12.9-12.9 12.9s-12.9-5.8-12.9-12.9V12.9C64.7 5.8 70.5 0 77.6 0s12.9 5.8 12.9 12.9v32.3z" fill="#2EB67D"/>
+        <path d="M77.6 97c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9-12.9-5.8-12.9-12.9V97h12.9zM77.6 90.5c-7.1 0-12.9-5.8-12.9-12.9s5.8-12.9 12.9-12.9h32.3c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9H77.6z" fill="#ECB22E"/>
+      </svg>
+    </span>
+  </section>
 
-<section class="block" aria-label="How it works">
-<h2>HOW<span class="ind">IT WORKS</span></h2>
-<ol class="steps">
-<li><strong>Download</strong> the zip above. It contains everything — no binaries, no secrets.</li>
-<li><strong>Run the guided setup</strong> (~30 min, your own free accounts: Vercel, Supabase, Telegram, cron-job.org, optional Slack).</li>
-<li><strong>Get your messages</strong> — daily 07:00 + 20:00, Saturday 08:00 + 15:00 America/Edmonton.</li>
-</ol>
-</section>
+  <!-- CARD 3 · hero -->
+  <section class="card automate" aria-label="StudyBuddy watches Canvas and tells you what needs doing">
+    <div class="copy">
+      <h1><span class="g">StudyBuddy</span> watches Canvas.<br>Tells you what needs doing.<br>You do the work.</h1>
+      <p class="sub">Morning digests, evening nudges and Saturday reviews. Set up once, running forever.</p>
+    </div>
+    <div class="illo">
+      <div class="win win-back">
+        <div class="win-bar"><i></i><i></i><i></i></div>
+        <div class="win-body"><div class="win-strip"></div></div>
+      </div>
+      <div class="win win-front">
+        <div class="win-bar"><i></i><i></i><i></i></div>
+        <div class="win-body"><div class="win-strip"></div></div>
+      </div>
+      <div class="pill-wf">
+        <span class="tick">
+          <svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M5.5 12.6l4 4L18.5 8" fill="none" stroke="#161616" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </span>
+        Review sent
+      </div>
+      <div class="pill-ai">
+        <span class="lines"><i></i><i></i></span>
+        <svg width="23" height="23" viewBox="0 0 23 23" aria-hidden="true">
+          <path d="M17.5 1c.3 2.2 1.9 3.8 4.1 4.1-2.2.3-3.8 1.9-4.1 4.1-.3-2.2-1.9-3.8-4.1-4.1 2.2-.3 3.8-1.9 4.1-4.1z" fill="#eff4e6" stroke="#4f7433" stroke-width="2.2" stroke-linejoin="round"/>
+          <path d="M9.5 6.5c.45 3.4 2.85 5.8 6.25 6.25-3.4.45-5.8 2.85-6.25 6.25-.45-3.4-2.85-5.8-6.25-6.25 3.4-.45 5.8-2.85 6.25-6.25z" fill="#eff4e6" stroke="#4f7433" stroke-width="2.25" stroke-linejoin="round"/>
+        </svg>
+      </div>
+      <svg class="cursor" width="30" height="35" viewBox="0 0 24 28" aria-hidden="true">
+        <path d="M5.5 1.8 19 14.6l-6.6 1 3.7 7.4-3.4 1.7-3.7-7.5-4.9 4.4z" fill="#fff" stroke="#2b2b2b" stroke-width="1.3" stroke-linejoin="round"/>
+      </svg>
+    </div>
+  </section>
 
-<section class="block" aria-label="What you need">
-<h2>WHAT<span class="ind">YOU NEED</span></h2>
-<ul class="needs">
-<li>Canvas account where you can create an access token</li>
-<li>Free accounts: Vercel, Supabase, Telegram, cron-job.org, (optional) Slack</li>
-<li>~30 minutes · $0/month</li>
-</ul>
-</section>
+  <!-- CARD 4 · insights -->
+  <section class="card insights" aria-label="Time saved by not digging through Canvas">
+    <span class="tag">Instead of digging through Canvas</span>
+    <h2>48 hours</h2>
+    <p class="sub">saved this week!</p>
+    <div class="chart" role="img" aria-label="Hours saved per day: Monday 2, Tuesday 6, Wednesday 12, Thursday 20, Friday 31, Saturday 40, Sunday 48">
+      <div class="col bar-col-43"><b>2h</b></div>
+      <div class="col bar-col-81"><b>6h</b></div>
+      <div class="col bar-col-132"><b>12h</b></div>
+      <div class="col bar-col-166"><b>20h</b></div>
+      <div class="col bar-col-203"><b>31h</b></div>
+      <div class="col bar-col-235"><b>40h</b></div>
+      <div class="col sun bar-col-265"><b>48h</b></div>
+    </div>
+    <div class="days" aria-hidden="true">
+      <span>MON</span><span>TUE</span><span>WED</span><span>THU</span><span>FRI</span><span>SAT</span><span class="sun">SUN</span>
+    </div>
+  </section>
 
-<section class="block" aria-label="Privacy">
-<h2>PRIVATE<span class="ind">BY DESIGN</span></h2>
-<p class="lead">It runs entirely in your own accounts. Nothing is sent to us. This site sets no cookies and has no analytics or trackers. The Canvas token is read-only and never leaves your deployment.</p>
-</section>
+  <!-- CARD 5 · download -->
+  <section class="card search" aria-label="Download StudyBuddy">
+    <h2>Finds everything.<br>Misses nothing.</h2>
+    <a class="bar-search" href="/downloads/studybuddy-latest.zip" download
+       title="SHA-256 {{SHA256}}" aria-label="Download the StudyBuddy self-host bundle, version {{VERSION}}">
+      <span class="mag">
+        <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="11" cy="11" r="7.1" fill="none" stroke="#121212" stroke-width="2.2"/>
+          <path d="M16.3 16.3 21 21" stroke="#121212" stroke-width="2.2" stroke-linecap="round"/>
+        </svg>
+      </span>
+      <span class="q">Download StudyBuddy v{{VERSION}} · {{SIZE}}<span class="q-extra"> · free &amp; self-hosted</span></span>
+      <svg class="dl" width="16" height="20" viewBox="0 0 16 20" aria-hidden="true">
+        <path d="M8 2v9.3" stroke="#141414" stroke-width="1.9" stroke-linecap="round"/>
+        <path d="M4.4 8.1 8 11.7l3.6-3.6" fill="none" stroke="#141414" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M2.5 14.3v2.2A1.5 1.5 0 0 0 4 18h8a1.5 1.5 0 0 0 1.5-1.5v-2.2" fill="none" stroke="#141414" stroke-width="1.9" stroke-linecap="round"/>
+      </svg>
+    </a>
+  </section>
 
-<section class="block" id="setup" aria-label="Setup guide">
-<h2>SETUP<span class="ind">GUIDE</span></h2>
-<ol class="steps">
-<li>Unzip, then <code>uv sync</code></li>
-<li><code>uv run canvasbuddy setup</code> — validates Canvas, Telegram via getUpdates, Slack test, Supabase pooler, timezone + slots, writes <code>.env</code> + <code>vercel.env</code>, runs migrations + first sync</li>
-<li>Deploy: <code>npm i -g vercel; vercel login; vercel link; vercel env</code> import from <code>vercel.env</code>; <code>vercel --prod</code></li>
-<li>Set Telegram webhook: <code>curl api.telegram.org/botTOKEN/setWebhook -d url=PROJECT.vercel.app/api/telegram -d secret_token=WEBHOOK_SECRET</code></li>
-<li>Create cron-job.org job: <code>GET PROJECT.vercel.app/api/cron</code> every 15 min, header <code>Authorization: Bearer CRON_SECRET</code></li>
-<li>Send <code>/testnotify review</code> to your bot. Full guide ships in the zip as SETUP.md.</li>
-</ol>
-</section>
+</main>
 
-<section class="block" aria-label="FAQ">
-<h2>QUESTIONS<span class="ind">&amp; ANSWERS</span></h2>
-<p><strong>Will it work with my school?</strong> Needs Canvas + token creation allowed. Check your school&apos;s policy. UAlberta Canvas works.</p>
-<p><strong>Does it cost anything?</strong> No — Vercel Hobby, Supabase free, cron-job.org free, Slack webhook free.</p>
-<p><strong>Can it submit or change anything?</strong> No — read-only.</p>
-<p><strong>How do I update?</strong> Re-download, keep your <code>.env</code>.</p>
-<p><strong>Can I change the times?</strong> Yes — env vars DIGEST_SLOT etc.</p>
-<p><strong>Known limits?</strong> One person per deployment. Others self-host their own copy.</p>
-</section>
+<p class="sr-only">Built by Mir Sadat Bin Rakib · MIT License. Canvas is a trademark of Instructure, Inc. This project is independent and not affiliated with or endorsed by Instructure.</p>
 
-<footer>
-<p>Built by Mir Sadat Bin Rakib · <a href="/LICENSE.txt">MIT License</a></p>
-<p>Canvas is a trademark of Instructure, Inc. This project is independent and not affiliated with or endorsed by Instructure.</p>
-</footer>
-</div>
-</div>
+<script>
+(function () {
+  var d = document.documentElement;
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches || window.__entrancePlayed) {
+    d.classList.remove('motion-pending', 'entrance-run');
+    return;
+  }
+  window.__entrancePlayed = true;
+  var fired = false;
+  function go() {
+    if (fired) return;
+    fired = true;
+    d.classList.remove('motion-pending');
+    d.classList.add('entrance-run');
+    setTimeout(function () { d.classList.remove('entrance-run'); }, 1850);
+  }
+  var t = setTimeout(go, 700);
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(function () { clearTimeout(t); go(); });
+  }
+})();
+</script>
+
 </body>
 </html>

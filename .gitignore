@@ -13,6 +13,7 @@ site/dist/
 build/
 .coverage
 htmlcov/
+server.log
 
 .vercel
 

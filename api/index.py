@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import hmac
 import logging
 import os
@@ -12,6 +13,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from fastapi import FastAPI, Header, HTTPException, Request  # noqa: E402
+from fastapi.staticfiles import StaticFiles  # noqa: E402
 from telegram import Update  # noqa: E402
 
 from canvasbuddy import bot  # noqa: E402
@@ -19,7 +21,34 @@ from canvasbuddy.config import get_settings  # noqa: E402
 from canvasbuddy.notify.service import run_tick  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
-app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+
+
+async def _dispose_tg() -> None:
+    """Dispose the DB engine and LLM client.
+
+    Best-effort: serverless instances may be frozen rather than shut down, so a failure
+    here must not block anything.
+    """
+    global _tg
+    if _tg is None:
+        return
+    try:
+        if _tg.post_shutdown:
+            await _tg.post_shutdown(_tg)
+    except Exception:
+        logging.getLogger(__name__).warning("post_shutdown failed", exc_info=True)
+    _tg = None
+
+
+@contextlib.asynccontextmanager
+async def lifespan(_app: FastAPI):
+    # Startup stays lazy: building the Telegram app on every cold start would also make
+    # /api/health and /api/cron pay for a getMe they do not need.
+    yield
+    await _dispose_tg()
+
+
+app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
 
 _tg = None
 _lock = asyncio.Lock()
@@ -32,8 +61,15 @@ async def get_tg():
             if _tg is None:
                 tg = bot.build_application()
                 await tg.initialize()
+                # PTB's initialize() deliberately does not run post_init -- only
+                # run_polling()/run_webhook() do. On the webhook path it has to be
+                # called by hand, or the OpenRouter client is never built and every
+                # conversational reply fails with "OPENROUTER_API_KEY isn't set".
+                if tg.post_init:
+                    await tg.post_init(tg)
                 _tg = tg
     return _tg
+
 
 
 def _check(provided: str | None, env: str, prefix: str = "") -> None:
@@ -56,7 +92,11 @@ async def telegram_webhook(
 ):
     _check(x_telegram_bot_api_secret_token, "WEBHOOK_SECRET")
     tg = await get_tg()
-    await tg.process_update(Update.de_json(await request.json(), tg.bot))
+    try:
+        payload = await request.json()
+    except ValueError:
+        raise HTTPException(400, "invalid JSON") from None
+    await tg.process_update(Update.de_json(payload, tg.bot))
     return {"ok": True}
 
 
@@ -68,3 +108,12 @@ async def cron(
 ):
     _check(authorization, "CRON_SECRET", prefix="Bearer ")
     return await run_tick(get_settings(), await get_tg(), dry_run=dry_run, now_override=now)
+
+
+# The landing page + downloads live in public/ and are served statically by Vercel in
+# production, so this mount only matters for local runs and previews -- it never sees
+# /api/* (registered above) and static files win before the function on Vercel.
+_PUBLIC_DIR = Path(__file__).resolve().parent.parent / "public"
+app.mount(
+    "/", StaticFiles(directory=_PUBLIC_DIR, html=True, check_dir=False), name="public"
+)
