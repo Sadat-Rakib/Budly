@@ -459,3 +459,52 @@ def render_digest_slack(content: DigestContent, settings: Settings) -> str:
     if content.is_empty:
         parts.append("Nothing due, nothing new. Enjoy it.")
     return "\n\n".join(parts)
+
+
+def render_digest_web(content: DigestContent, settings: Settings) -> str:
+    """Render DigestContent as markdown for the dashboard card.
+
+    Same sections and priority as the Telegram and Slack renders, but links survive
+    here: every announcement and assignment that Canvas gave a URL for becomes a
+    markdown link the dashboard can click through.
+    """
+    tz = settings.tz
+    local_date = content.local_date.astimezone(tz)
+    parts = [f"**{local_date.strftime('%A, %b')} {local_date.day}**"]
+
+    def block(heading: str, items, with_due: bool) -> None:
+        if not items:
+            return
+        lines = [f"**{heading}**"]
+        for it in items:
+            title = f"[{it.title}]({it.url})" if it.url else it.title
+            bits: list[str] = []
+            if with_due and it.due_at:
+                bits.append(_fmt_due(it.due_at, tz))
+            if it.detail:
+                bits.append(it.detail)
+            label = f"{it.course_code} — {title}"
+            lines.append(f"- {label}" + (f" · {bits[0]}" if bits else ""))
+        parts.append("\n".join(lines))
+
+    block("Due today", content.due_today, True)
+    block("Next 72 hours", content.upcoming, True)
+    block("Exam countdown", content.exams, False)
+    block("New announcements", content.announcements, False)
+    if settings.show_grades_in_digest:
+        block("Graded", content.graded, False)
+    block("No due date set", content.undated, False)
+    if content.is_empty:
+        parts.append("Nothing due, nothing new. Enjoy it.")
+    return "\n\n".join(parts)
+
+
+def render_notification_web(nc: NotificationContent) -> str:
+    """Render a nudge/review/checkin as dashboard markdown."""
+    parts = [f"**{nc.title}**"]
+    for section in nc.sections:
+        lines = [f"**{section.heading}**", *(f"- {line}" for line in section.lines)]
+        parts.append("\n".join(lines))
+    if nc.footer:
+        parts.append(nc.footer)
+    return "\n\n".join(parts)

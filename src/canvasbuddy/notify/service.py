@@ -17,6 +17,8 @@ from canvasbuddy.notify.builders import (
     build_nudge_content,
     build_review_content,
     render_digest_slack,
+    render_digest_web,
+    render_notification_web,
 )
 from canvasbuddy.notify.content import NotificationContent
 from canvasbuddy.notify.notifiers import (
@@ -45,6 +47,45 @@ def _parse_now_override(raw: str | None, tz) -> datetime | None:
     return dt.astimezone(UTC)
 
 
+async def sync_now(settings: Settings) -> dict:
+    """One forced sync pass. Returns {ok, summary|error, report}.
+
+    Also the observability hook: the last sync's stamp and any error are stashed in
+    the settings table so the dashboard can show "last synced 4 minutes ago" or
+    "Canvas rejected the token" without re-running a sync to find out.
+    """
+    try:
+        async with CanvasClient(settings) as client, session_scope() as session:
+            report = await sync_all_safe(session, client, settings)
+        async with session_scope() as s:
+            await settings_put(s, "last_sync_at", datetime.now(UTC).isoformat())
+            await settings_put(s, "last_sync_error", None)
+        log.info("sync: %s", report.summary().replace("\n", " | "))
+        return {
+            "ok": True,
+            "summary": report.summary(),
+            "report": {
+                "courses_tracked": report.courses_tracked,
+                "assignments": report.assignments_upserted,
+                "announcements": report.announcements_upserted,
+                "events": len(report.events),
+            },
+        }
+    except TokenRevokedError as exc:
+        async with session_scope() as s:
+            await settings_put(s, "last_sync_error", f"Canvas token rejected: {exc}")
+        return {"ok": False, "kind": "token", "error": f"Canvas token rejected: {exc}"}
+    except Exception as exc:  # noqa: BLE001
+        log.exception("sync failed")
+        message = f"{type(exc).__name__}: {exc}"
+        try:
+            async with session_scope() as s:
+                await settings_put(s, "last_sync_error", message)
+        except Exception:  # noqa: BLE001
+            log.exception("could not record sync failure")
+        return {"ok": False, "kind": "canvas", "error": message}
+
+
 async def _maybe_sync(settings: Settings, force: bool) -> tuple[bool, str | None]:
     """Sync if forced (slot due) or >60min since last_sync_at. Returns (synced, error)."""
     if not force:
@@ -59,18 +100,8 @@ async def _maybe_sync(settings: Settings, force: bool) -> tuple[bool, str | None
                         return False, None
         except Exception:
             pass
-    try:
-        async with CanvasClient(settings) as client, session_scope() as session:
-            report = await sync_all_safe(session, client, settings)
-        async with session_scope() as s:
-            await settings_put(s, "last_sync_at", datetime.now(UTC).isoformat())
-        log.info("tick sync: %s", report.summary().replace("\n", " | ") if report else "ok")
-        return True, None
-    except TokenRevokedError as exc:
-        return False, f"Canvas token rejected: {exc}"
-    except Exception as exc:  # noqa: BLE001
-        log.exception("tick sync failed")
-        return False, f"{type(exc).__name__}: {exc}"
+    result = await sync_now(settings)
+    return result["ok"], None if result["ok"] else result.get("error")
 
 
 async def sync_all_safe(session, client, settings):
@@ -96,19 +127,32 @@ async def _fanout_one_slot(
     local_date,
     telegram_payloads: list[str],
     slack_payloads: list[str],
+    web_payloads: list[str] | None = None,
     items: dict,
 ) -> dict[str, str]:
-    """Per-channel own DB session with unique (local_date, channel, kind)."""
+    """Per-channel own DB session with unique (local_date, channel, kind).
+
+    The "web" channel has no external send: its row *is* the delivery, the digest the
+    dashboard card reads. It exists so StudyBuddy's own UI shows the same digest the
+    messaging channels got, under the same once-per-day guarantee.
+    """
     results: dict[str, str] = {}
     enabled = []
     if settings.telegram_bot_token and settings.telegram_chat_id:
         enabled.append("telegram")
     if settings.slack_webhook_url:
         enabled.append("slack")
+    enabled.append("web")
 
     for ch in enabled:
-        payloads = telegram_payloads if ch == "telegram" else slack_payloads
+        if ch == "telegram":
+            payloads = telegram_payloads
+        elif ch == "slack":
+            payloads = slack_payloads
+        else:
+            payloads = web_payloads or []
         if not payloads:
+            results[ch] = "skipped"
             continue
         body = "\n\n".join(payloads)[:8000]
         try:
@@ -126,7 +170,7 @@ async def _fanout_one_slot(
                 if ch == "telegram":
                     for p in payloads:
                         await _send_telegram(settings, p)
-                else:
+                elif ch == "slack":
                     for p in payloads:
                         await _send_slack(settings, p)
                 results[ch] = "sent"
@@ -173,27 +217,36 @@ async def run_tick(
                     content = await build_digest(session, settings, now=now_utc)
                     tg_text = render_digest(content, settings)
                     sl_text = render_digest_slack(content, settings)
-                    rendered[kind] = {"telegram": [tg_text], "slack": [sl_text]}
+                    web_text = render_digest_web(content, settings)
+                    rendered[kind] = {"telegram": [tg_text], "slack": [sl_text], "web": [web_text]}
                 elif kind == "nudge":
                     nc = await build_nudge_content(session, settings, now=now_utc)
                     if nc is None:
-                        rendered[kind] = {"telegram": [], "slack": [], "note": "nothing to say"}
+                        rendered[kind] = {
+                            "telegram": [],
+                            "slack": [],
+                            "web": [],
+                            "note": "nothing to say",
+                        }
                     else:
                         rendered[kind] = {
                             "telegram": render_telegram_chunks(nc),
                             "slack": render_slack_chunks(nc),
+                            "web": [render_notification_web(nc)],
                         }
                 elif kind == "review":
                     nc = await build_review_content(session, settings, now=now_utc)
                     rendered[kind] = {
                         "telegram": render_telegram_chunks(nc),
                         "slack": render_slack_chunks(nc),
+                        "web": [render_notification_web(nc)],
                     }
                 elif kind == "checkin":
                     nc = await build_checkin_content(session, settings, now=now_utc)
                     rendered[kind] = {
                         "telegram": render_telegram_chunks(nc),
                         "slack": render_slack_chunks(nc),
+                        "web": [render_notification_web(nc)],
                     }
         return {
             "ok": True,
@@ -278,6 +331,7 @@ async def run_tick(
                     else [sl_text]
                 )
                 items = {"announcement_ids": content.announcement_ids, "trigger": kind}
+                web_payloads = [render_digest_web(content, settings)]
             elif kind == "nudge":
                 nc: NotificationContent | None = await build_nudge_content(
                     session, settings, now=now_utc
@@ -287,16 +341,19 @@ async def run_tick(
                     continue
                 tg_payloads = render_telegram_chunks(nc)
                 sl_payloads = render_slack_chunks(nc)
+                web_payloads = [render_notification_web(nc)]
                 items = {"trigger": kind}
             elif kind == "review":
                 nc = await build_review_content(session, settings, now=now_utc)
                 tg_payloads = render_telegram_chunks(nc)
                 sl_payloads = render_slack_chunks(nc)
+                web_payloads = [render_notification_web(nc)]
                 items = {"trigger": kind}
             elif kind == "checkin":
                 nc = await build_checkin_content(session, settings, now=now_utc)
                 tg_payloads = render_telegram_chunks(nc)
                 sl_payloads = render_slack_chunks(nc)
+                web_payloads = [render_notification_web(nc)]
                 items = {"trigger": kind}
             else:
                 continue
@@ -308,6 +365,7 @@ async def run_tick(
                 local_date=local_date,
                 telegram_payloads=tg_payloads,
                 slack_payloads=sl_payloads,
+                web_payloads=web_payloads,
                 items=items,
             )
             results[kind] = res

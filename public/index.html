@@ -2,14 +2,14 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>StudyBuddy: Your Canvas courses, in Telegram and Slack</title>
+<title>StudyBuddy: ask your Canvas. Morning and evening updates, on the web and in Telegram.</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="description" content="StudyBuddy watches your Canvas account and messages you on Telegram and Slack: morning digest, evening nudge, Saturday review. Free, self-hosted, read-only.">
-<meta property="og:title" content="StudyBuddy: Your Canvas courses, in Telegram and Slack">
-<meta property="og:description" content="Morning digest, evening nudges, Saturday review. Free. Self-hosted. Read-only Canvas.">
+<meta name="description" content="Connect Canvas once. Ask StudyBuddy what's due, what changed, and what needs doing — on the web, on Telegram, on Slack. Free, self-hosted, read-only.">
+<meta property="og:title" content="StudyBuddy: ask your Canvas.">
+<meta property="og:description" content="Morning digest, evening nudges, Saturday review, and a mascot that knows your courses. Free. Self-hosted. Read-only Canvas.">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="StudyBuddy: Your Canvas courses, in Telegram and Slack">
+<meta name="twitter:title" content="StudyBuddy: ask your Canvas.">
 <meta name="twitter:description" content="Morning digest, evening nudges, Saturday review. Free. Self-hosted.">
 <link rel="icon" href="data:,📚">
 <script>
@@ -20,13 +20,21 @@
   setTimeout(function () { d.classList.remove('motion-pending', 'entrance-run'); }, 2400);
 })();
 </script>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
+/* Plus Jakarta Sans, variable 200-800, latin subset. Self-hosted so the page
+   makes no third-party requests at all. */
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+  src: url(/fonts/plus-jakarta-sans-latin.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
 :root { color-scheme: light; }
 html { font-size: min(calc(95vw / 1374), calc(94vh / 666)); }
 * { margin: 0; padding: 0; box-sizing: border-box; }
+[hidden] { display: none !important; }
 body {
   background: #f0f0f0;
   color: #141414;
@@ -144,80 +152,216 @@ body {
   background:
     radial-gradient(90% 70% at 6% 0%, rgba(226,236,200,.9) 0%, rgba(226,236,200,0) 70%),
     linear-gradient(168deg, #e2ebc9 0%, #e9f0c4 48%, #f0f4b8 78%, #f3f5b0 100%);
+  display: flex;
+  flex-direction: column;
 }
-.automate .copy { position: relative; z-index: 3; padding: 37rem 0 0 45rem; }
+.automate .copy { position: relative; z-index: 3; padding: 30rem 0 0 45rem; flex: none; }
 .automate h1 {
-  font-size: 35rem; font-weight: 800; line-height: 1.43; letter-spacing: -.03em;
+  font-size: 31rem; font-weight: 800; line-height: 1.32; letter-spacing: -.03em;
   color: #15201a;
 }
 .automate h1 .g { color: #5f8b3e; }
 .automate .sub {
-  margin-top: 13rem;
-  font-size: 17rem; font-weight: 400; line-height: 1.3; letter-spacing: -.014em;
+  margin-top: 10rem;
+  font-size: 15.5rem; font-weight: 400; line-height: 1.3; letter-spacing: -.014em;
   color: #1e2a1b;
-  max-width: 470rem;
+  max-width: 430rem;
 }
-.illo { position: absolute; inset: 0; z-index: 2; }
-.win {
+.botzone {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 6rem 26rem 0 45rem;
+}
+.bot {
   position: absolute;
-  border: 3rem solid #fff;
-  border-radius: 11rem;
-  overflow: hidden;
-  box-shadow: 0 12rem 28rem rgba(64,74,44,.16);
+  right: 42rem;
+  top: -4rem;
+  z-index: 2;
 }
-.win-bar {
-  height: 13.4rem; background: #242424; flex: none;
-  display: flex; align-items: center; gap: 4.6rem; padding-left: 4.9rem;
+.chatlog {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 9rem;
+  padding: 8rem 170rem 6rem 0;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(21,32,26,.18) transparent;
 }
-.win-bar i {
-  width: 6rem; height: 6rem; border-radius: 50%;
-  background: linear-gradient(150deg, #fff 0%, #f6f6f6 50%, #dcdcdc 100%);
+.chatlog::-webkit-scrollbar { width: 5rem; }
+.chatlog::-webkit-scrollbar-thumb { border-radius: 99rem; background: rgba(21,32,26,.18); }
+.msg { max-width: 88%; }
+.msg-body {
+  padding: 10rem 14rem;
+  border-radius: 13rem;
+  font-size: 13.2rem;
+  line-height: 1.42;
+  letter-spacing: -.012em;
+  color: #17251c;
+  overflow-wrap: break-word;
 }
-.win-body { display: flex; height: calc(100% - 13.4rem); }
-.win-strip { height: 100%; flex: none; }
-.win-back {
-  left: 121.2rem; top: 245.2rem; width: 324rem; height: 250rem;
-  transform: rotate(-7.02deg);
+.msg-bot .msg-body {
+  background: rgba(255,255,255,.86);
+  box-shadow: 0 2rem 9rem rgba(64,74,44,.10);
+  border-bottom-left-radius: 5rem;
 }
-.win-back .win-body { background: #eaefcd; }
-.win-back .win-strip { width: 23.7%; background: #bfd0ac; }
-.win-front {
-  left: 180.4rem; top: 283.3rem; width: 322rem; height: 250rem;
-  transform: rotate(4.23deg);
-  border-bottom: 0;
-  border-bottom-left-radius: 0; border-bottom-right-radius: 0;
-  box-shadow: 0 14rem 32rem rgba(64,74,44,.18);
+.msg-user { align-self: flex-end; }
+.msg-user .msg-body {
+  background: linear-gradient(140deg, #dff0d0 0%, #d3e9c0 100%);
+  box-shadow: 0 2rem 9rem rgba(64,74,44,.12);
+  border-bottom-right-radius: 5rem;
 }
-.win-front .win-body { background: #f9edfb; }
-.win-front .win-strip { width: 16%; background: #e8d6fb; }
-.pill-wf {
-  position: absolute; left: 395rem; top: 349rem; height: 30rem; z-index: 3;
-  display: flex; align-items: center; gap: 7rem;
-  padding: 0 14rem 0 6rem; border-radius: 999rem; background: #fff;
-  box-shadow: 0 0 0 2.8rem rgba(0,0,0,.045);
-  transform: rotate(-1.2deg);
-  font-size: 11.5rem; font-weight: 600; letter-spacing: -.014em; color: #151515;
+.msg-thinking .msg-body { color: #5a6b52; font-style: italic; }
+.msg-sources {
+  margin-top: 4rem;
+  display: flex; flex-wrap: wrap; gap: 4rem 12rem;
+  font-size: 11rem;
 }
-.pill-wf .tick {
-  width: 20rem; height: 20rem; border-radius: 50%; flex: none;
+.msg-sources a {
+  color: #3f6b28;
+  font-weight: 600;
+  text-decoration: none;
+  border-bottom: 1rem solid rgba(63,107,40,.35);
+}
+.msg-sources a:hover, .msg-sources a:focus-visible { border-bottom-color: #3f6b28; }
+.askbar {
+  flex: none;
+  display: flex;
+  align-items: flex-end;
+  gap: 8rem;
+  margin: 7rem 0 0 0;
+  background: #fff;
+  border-radius: 999rem;
+  box-shadow: 0 4rem 14rem rgba(64,74,44,.14);
+  padding: 6rem 6rem 6rem 20rem;
+}
+.askbar textarea {
+  flex: 1;
+  border: 0; outline: none; background: transparent; resize: none;
+  font: inherit;
+  font-size: 14rem;
+  line-height: 1.35;
+  letter-spacing: -.014em;
+  color: #141414;
+  padding: 6rem 0;
+  max-height: 64rem;
+}
+.askbar textarea::placeholder { color: #8c9a84; }
+.askbar textarea:focus-visible { outline: none; }
+.askbar:focus-within { box-shadow: 0 4rem 14rem rgba(64,74,44,.14), 0 0 0 2.4rem rgba(95,139,62,.30); }
+.askbar button {
+  flex: none;
+  width: 42rem; height: 42rem;
+  border: 0; border-radius: 50%;
+  background: linear-gradient(145deg, #6f9b4c 0%, #55813a 100%);
+  color: #fff;
+  font-size: 18rem;
+  font-weight: 700;
+  cursor: pointer;
   display: flex; align-items: center; justify-content: center;
-  background:
-    radial-gradient(120% 120% at 28% 22%, rgba(255,255,255,.95) 0%, rgba(255,255,255,0) 55%),
-    linear-gradient(145deg, #e6f3df 0%, #cfe0bd 47%, #b9cfa5 100%);
+  box-shadow: 0 3rem 9rem rgba(64,94,40,.30);
 }
-.pill-ai {
-  position: absolute; left: 68rem; top: 404rem; width: 144rem; height: 52rem; z-index: 3;
-  border-radius: 10rem; background: #fff;
-  box-shadow: 0 0 0 2.8rem rgba(0,0,0,.045);
-  display: flex; align-items: center; gap: 9rem; padding: 0 16rem;
-  transform: rotate(-1deg);
+.askbar button:hover { filter: brightness(1.06); }
+.askbar button:focus-visible { outline: 2.4rem solid rgba(95,139,62,.55); outline-offset: 2rem; }
+.askbar button:disabled { opacity: .55; cursor: default; }
+.promptchips {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8rem;
+  padding: 9rem 0 16rem 45rem;
 }
-.pill-ai .lines { display: flex; flex-direction: column; gap: 8rem; }
-.pill-ai .lines i { height: 6.5rem; border-radius: 99rem; background: #d8d8d7; display: block; }
-.pill-ai .lines i:first-child { width: 66rem; }
-.pill-ai .lines i:last-child { width: 46rem; }
-.pill-ai > svg { flex: none; }
-.cursor { position: absolute; left: 490rem; top: 454rem; z-index: 4; }
+.pchip {
+  height: 30rem;
+  display: inline-flex; align-items: center;
+  padding: 0 14rem;
+  border-radius: 999rem;
+  border: 0;
+  background: rgba(255,255,255,.78);
+  box-shadow: 0 0 0 2.4rem rgba(0,0,0,.045);
+  font: inherit;
+  font-size: 12rem;
+  font-weight: 600;
+  letter-spacing: -.014em;
+  color: #1c2a1a;
+  cursor: pointer;
+}
+.pchip:hover { background: #fff; }
+.pchip:focus-visible { outline: 2.4rem solid rgba(95,139,62,.55); outline-offset: 1.6rem; }
+.statusline {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 4rem 12rem;
+  padding: 0 30rem 14rem 45rem;
+  font-size: 10.4rem;
+  font-weight: 500;
+  letter-spacing: -.01em;
+  color: #57684e;
+}
+.syncinfo { opacity: .85; }
+.refreshbtn {
+  border: 0;
+  background: rgba(255,255,255,.7);
+  box-shadow: 0 0 0 2rem rgba(0,0,0,.045);
+  border-radius: 999rem;
+  padding: 4rem 11rem;
+  font: inherit;
+  font-size: 10.4rem;
+  font-weight: 600;
+  color: #33472b;
+  cursor: pointer;
+}
+.refreshbtn:hover { background: #fff; }
+.refreshbtn:focus-visible { outline: 2.2rem solid rgba(95,139,62,.55); outline-offset: 1.4rem; }
+.authrow {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8rem;
+  margin: 7rem 0 0 0;
+  background: #fff;
+  border-radius: 999rem;
+  box-shadow: 0 4rem 14rem rgba(64,74,44,.14);
+  padding: 6rem 6rem 6rem 20rem;
+}
+.authrow input {
+  flex: 1;
+  border: 0; outline: none; background: transparent;
+  font: inherit;
+  font-size: 14rem;
+  letter-spacing: -.014em;
+  color: #141414;
+  padding: 6rem 0;
+}
+.authrow input::placeholder { color: #8c9a84; }
+.authrow button {
+  flex: none;
+  height: 42rem;
+  border: 0; border-radius: 999rem;
+  background: linear-gradient(145deg, #6f9b4c 0%, #55813a 100%);
+  color: #fff;
+  font: inherit;
+  font-size: 13rem;
+  font-weight: 700;
+  padding: 0 20rem;
+  cursor: pointer;
+  box-shadow: 0 3rem 9rem rgba(64,94,40,.30);
+}
+.authrow button:focus-visible { outline: 2.4rem solid rgba(95,139,62,.55); outline-offset: 2rem; }
+.authnote {
+  flex: none;
+  margin: 8rem 0 0 45rem;
+  font-size: 12rem;
+  color: #7a4a3a;
+  min-height: 0;
+}
 
 /* ----------------------------------------------------- card 4 · insights */
 .insights {
@@ -303,8 +447,9 @@ body {
 
 /* -------------------------------------------------- entrance: choreography */
 .entrance-run .card, .entrance-run .toast-wrap, .entrance-run .chip-row,
-.entrance-run .chip-slack, .entrance-run .win-back, .entrance-run .win-front,
-.entrance-run .pill-ai, .entrance-run .pill-wf, .entrance-run .cursor,
+.entrance-run .chip-slack, .entrance-run .bot,
+.entrance-run .chatlog, .entrance-run .askbar, .entrance-run .authrow,
+.entrance-run .promptchips, .entrance-run .statusline,
 .entrance-run .tag, .entrance-run .chart, .entrance-run .bar-search {
   will-change: opacity, translate, scale, clip-path;
   animation-fill-mode: backwards;
@@ -353,11 +498,12 @@ body {
 .entrance-run .search        { animation: panel-settle .68s cubic-bezier(.16,1,.3,1) .28s; }
 .entrance-run .automate h1   { animation: type-unmask .78s cubic-bezier(.22,1,.36,1) .20s; }
 .entrance-run .automate .sub { animation: content-rise .54s cubic-bezier(.16,1,.3,1) .48s; }
-.entrance-run .win-back      { animation: interface-settle .84s cubic-bezier(.16,1,.3,1) .42s; }
-.entrance-run .win-front     { animation: interface-settle .94s cubic-bezier(.16,1,.3,1) .50s; }
-.entrance-run .pill-ai       { animation: detail-settle .60s cubic-bezier(.16,1,.3,1) .72s; }
-.entrance-run .pill-wf       { animation: detail-settle .58s cubic-bezier(.16,1,.3,1) .78s; }
-.entrance-run .cursor        { animation: detail-settle .54s cubic-bezier(.16,1,.3,1) .96s; }
+.entrance-run .bot          { animation: interface-settle .84s cubic-bezier(.16,1,.3,1) .42s; }
+.entrance-run .chatlog      { animation: content-rise .54s cubic-bezier(.16,1,.3,1) .60s; }
+.entrance-run .askbar       { animation: detail-settle .60s cubic-bezier(.16,1,.3,1) .72s; }
+.entrance-run .authrow      { animation: detail-settle .60s cubic-bezier(.16,1,.3,1) .72s; }
+.entrance-run .promptchips  { animation: detail-settle .58s cubic-bezier(.16,1,.3,1) .78s; }
+.entrance-run .statusline   { animation: detail-settle .54s cubic-bezier(.16,1,.3,1) .96s; }
 .entrance-run .toast-wrap    { animation: toast-arrive .62s cubic-bezier(.16,1,.3,1) .38s; }
 .entrance-run .connect h2    { animation: type-unmask .64s cubic-bezier(.22,1,.36,1) .54s; }
 .entrance-run .connect .sub  { animation: content-rise .48s cubic-bezier(.16,1,.3,1) .73s; }
@@ -387,6 +533,8 @@ body {
   .connect  { grid-column: 2; grid-row: 2 / span 2; }
   .notif { padding-top: 32rem; }
   .toast-wrap { width: 380rem; max-width: calc(100% - 24rem); margin: 0 auto; }
+  .botzone { padding: 6rem 22rem 0 40rem; }
+  .chatlog { padding-right: 150rem; }
   .toast-copy strong { font-size: 12.4rem; }
   .toast-copy span { font-size: 11rem; }
   .toast-time { font-size: 8.4rem; }
@@ -410,14 +558,20 @@ body {
   .notif, .connect, .automate, .insights, .search { grid-column: 1; grid-row: auto; }
   .notif    { height: 149rem; }
   .connect  { height: 508rem; }
-  .automate { height: 298rem; }
+  .automate { height: auto; min-height: 480rem; }
   .insights { height: 500rem; }
   .search   { height: auto; flex-direction: column; align-items: stretch; gap: 18rem; padding: 24rem 20rem; }
   .search h2 { font-size: 21rem; }
   .automate .copy { padding: 24rem 0 0 22rem; }
-  .automate h1 { font-size: 24rem; max-width: 300rem; }
-  .automate .sub { font-size: 13rem; max-width: 280rem; }
-  .illo { scale: .5981; transform-origin: 0 0; }
+  .automate h1 { font-size: 24rem; max-width: 320rem; }
+  .automate .sub { font-size: 13rem; max-width: 300rem; }
+  .botzone { padding: 6rem 18rem 0 22rem; }
+  .bot { position: static; margin: 4rem auto 0; }
+  .chatlog { padding-right: 0; min-height: 150rem; }
+  .msg { max-width: 94%; }
+  .msg-body { font-size: 14rem; }
+  .promptchips { padding: 9rem 18rem 14rem 22rem; }
+  .statusline { padding: 0 18rem 14rem 22rem; }
   .bar-search { margin-left: 0; width: 100%; height: 58rem; }
 }
 /* mobile: insights/search never hide and never animate */
@@ -432,8 +586,9 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .motion-pending .card { opacity: 1; visibility: visible; }
   .entrance-run .card, .entrance-run .toast-wrap, .entrance-run .chip-row,
-  .entrance-run .chip-slack, .entrance-run .win-back, .entrance-run .win-front,
-  .entrance-run .pill-ai, .entrance-run .pill-wf, .entrance-run .cursor,
+  .entrance-run .chip-slack, .entrance-run .bot,
+  .entrance-run .chatlog, .entrance-run .askbar, .entrance-run .authrow,
+  .entrance-run .promptchips, .entrance-run .statusline,
   .entrance-run .tag, .entrance-run .chart, .entrance-run .bar-search { animation: none !important; }
 }
 
@@ -463,10 +618,10 @@ body {
           <path d="M12 6.9c.33 3.36 2.61 5.64 5.97 5.97-3.36.33-5.64 2.61-5.97 5.97-.33-3.36-2.61-5.64-5.97-5.97 3.36-.33 5.64-2.61 5.97-5.97z" fill="#0d0d0d"/>
         </svg>
         <div class="toast-copy">
-          <strong>Digest sent!</strong>
-          <span>3 due this week · AUMAT quiz Oct 1 · 2 new posts</span>
+          <strong id="toast-title">Digest sent!</strong>
+          <span id="toast-body">3 due this week · AUMAT quiz Oct 1 · 2 new posts</span>
         </div>
-        <span class="toast-time">7:00 AM</span>
+        <span class="toast-time" id="toast-time">7:00 AM</span>
       </div>
     </div>
   </section>
@@ -528,40 +683,32 @@ body {
     </span>
   </section>
 
-  <!-- CARD 3 · hero -->
-  <section class="card automate" aria-label="StudyBuddy watches Canvas and tells you what needs doing">
+  <!-- CARD 3 · hero: Postbot + Canvas chat -->
+  <section class="card automate" aria-label="Ask StudyBuddy about your Canvas">
     <div class="copy">
-      <h1><span class="g">StudyBuddy</span> watches Canvas.<br>Tells you what needs doing.<br>You do the work.</h1>
-      <p class="sub">Morning digests, evening nudges and Saturday reviews. Set up once, running forever.</p>
+      <h1>Hey, I'm <span class="g">StudyBuddy</span>.<br>I watch Canvas<br>so you don't have to.</h1>
+      <p class="sub">Connect Canvas once. Ask about deadlines, announcements, or what changed today.</p>
     </div>
-    <div class="illo">
-      <div class="win win-back">
-        <div class="win-bar"><i></i><i></i><i></i></div>
-        <div class="win-body"><div class="win-strip"></div></div>
-      </div>
-      <div class="win win-front">
-        <div class="win-bar"><i></i><i></i><i></i></div>
-        <div class="win-body"><div class="win-strip"></div></div>
-      </div>
-      <div class="pill-wf">
-        <span class="tick">
-          <svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M5.5 12.6l4 4L18.5 8" fill="none" stroke="#161616" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </span>
-        Review sent
-      </div>
-      <div class="pill-ai">
-        <span class="lines"><i></i><i></i></span>
-        <svg width="23" height="23" viewBox="0 0 23 23" aria-hidden="true">
-          <path d="M17.5 1c.3 2.2 1.9 3.8 4.1 4.1-2.2.3-3.8 1.9-4.1 4.1-.3-2.2-1.9-3.8-4.1-4.1 2.2-.3 3.8-1.9 4.1-4.1z" fill="#eff4e6" stroke="#4f7433" stroke-width="2.2" stroke-linejoin="round"/>
-          <path d="M9.5 6.5c.45 3.4 2.85 5.8 6.25 6.25-3.4.45-5.8 2.85-6.25 6.25-.45-3.4-2.85-5.8-6.25-6.25 3.4-.45 5.8-2.85 6.25-6.25z" fill="#eff4e6" stroke="#4f7433" stroke-width="2.25" stroke-linejoin="round"/>
-        </svg>
-      </div>
-      <svg class="cursor" width="30" height="35" viewBox="0 0 24 28" aria-hidden="true">
-        <path d="M5.5 1.8 19 14.6l-6.6 1 3.7 7.4-3.4 1.7-3.7-7.5-4.9 4.4z" fill="#fff" stroke="#2b2b2b" stroke-width="1.3" stroke-linejoin="round"/>
-      </svg>
+    <div class="botzone">
+      <div class="bot" id="postbot" role="img" aria-label="Postbot, the StudyBuddy mascot"></div>
+      <div class="chatlog" id="chatlog" aria-live="polite" aria-label="Conversation with StudyBuddy"></div>
+      <form class="askbar" id="askform" hidden>
+        <textarea id="askinput" rows="1" placeholder="Ask StudyBuddy about your Canvas…" aria-label="Ask StudyBuddy about your Canvas"></textarea>
+        <button type="submit" id="asksend" aria-label="Send question">↑</button>
+      </form>
+      <form class="authrow" id="authform" hidden>
+        <input type="password" id="authinput" placeholder="Dashboard password…" aria-label="Dashboard password" autocomplete="current-password">
+        <button type="submit">Sign in</button>
+      </form>
+      <p class="authnote" id="authnote" role="status"></p>
     </div>
+    <div class="promptchips" aria-label="Suggested questions">
+      <button type="button" class="pchip" data-q="What's due this week?">Due this week</button>
+      <button type="button" class="pchip" data-q="What's new since yesterday?">What's new?</button>
+      <button type="button" class="pchip" data-q="What's my next assignment?">Next assignment</button>
+      <button type="button" class="pchip" data-q="What changed in my courses?">Course updates</button>
+    </div>
+    <div class="statusline" id="statusline" aria-live="polite"></div>
   </section>
 
   <!-- CARD 4 · insights -->
@@ -587,14 +734,14 @@ body {
   <section class="card search" aria-label="Download StudyBuddy">
     <h2>Finds everything.<br>Misses nothing.</h2>
     <a class="bar-search" href="/downloads/studybuddy-latest.zip" download
-       title="SHA-256 a554f262912c0868fe065f8b91bd5db39e0c9b6f94b2eca64da263314a56d54e" aria-label="Download the StudyBuddy self-host bundle, version 0.1.0">
+       title="SHA-256 b149c7bc6c0e5d3c668ba68f949b88b85d061c03ca03f3bc5452373c5069b069" aria-label="Download the StudyBuddy self-host bundle, version 0.2.0">
       <span class="mag">
         <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
           <circle cx="11" cy="11" r="7.1" fill="none" stroke="#121212" stroke-width="2.2"/>
           <path d="M16.3 16.3 21 21" stroke="#121212" stroke-width="2.2" stroke-linecap="round"/>
         </svg>
       </span>
-      <span class="q">Download StudyBuddy v0.1.0 · 189 KB<span class="q-extra"> · free &amp; self-hosted</span></span>
+      <span class="q">Download StudyBuddy v0.2.0 · 217 KB<span class="q-extra"> · free &amp; self-hosted</span></span>
       <svg class="dl" width="16" height="20" viewBox="0 0 16 20" aria-hidden="true">
         <path d="M8 2v9.3" stroke="#141414" stroke-width="1.9" stroke-linecap="round"/>
         <path d="M4.4 8.1 8 11.7l3.6-3.6" fill="none" stroke="#141414" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
@@ -629,6 +776,8 @@ body {
   }
 })();
 </script>
+<script src="/mascot.js" defer></script>
+<script src="/app.js" defer></script>
 
 </body>
 </html>

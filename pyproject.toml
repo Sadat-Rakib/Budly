@@ -1,6 +1,6 @@
 [project]
 name = "canvasbuddy"
-version = "0.1.0"
+version = "0.2.0"
 description = "StudyBuddy — your Canvas courses in Telegram and Slack. Morning digest, evening nudges, Saturday review."
 authors = [{ name = "Mir Sadat Bin Rakib" }]
 readme = "README.md"

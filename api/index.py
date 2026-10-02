@@ -19,6 +19,7 @@ from telegram import Update  # noqa: E402
 from canvasbuddy import bot  # noqa: E402
 from canvasbuddy.config import get_settings  # noqa: E402
 from canvasbuddy.notify.service import run_tick  # noqa: E402
+from canvasbuddy.web.api import router as web_router  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
@@ -49,6 +50,7 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
+app.include_router(web_router)
 
 _tg = None
 _lock = asyncio.Lock()

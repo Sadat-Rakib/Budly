@@ -45,7 +45,8 @@ vercel link
 # CANVAS_TOKEN, CANVAS_TERM, TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID,
 # USER_TIMEZONE=America/Edmonton, USER_NAME, DATABASE_URL, WEBHOOK_SECRET,
 # CRON_SECRET, DIGEST_SLOT, NUDGE_SLOT, REVIEW_SLOT, CHECKIN_SLOT,
-# NOTIFY_GRACE_MINUTES, SLACK_WEBHOOK_URL
+# NOTIFY_GRACE_MINUTES, SLACK_WEBHOOK_URL, DASHBOARD_PASSWORD, APP_SECRET,
+# and optionally OPENROUTER_API_KEY
 vercel --prod
 ```
 
@@ -71,11 +72,16 @@ Free account → Create cronjob: URL `https://<project>.vercel.app/api/cron`, ev
 
 Verify: `GET /api/cron?dry_run=1&now=2026-09-26T08:00:00-06:00` with same header returns `due:["review"]` + rendered payloads, sends nothing.
 
-## 8. Landing page
+## 8. Landing page + dashboard
 
-No second project needed — the bot deployment serves it. `/` returns the landing page,
-`/downloads/studybuddy-latest.zip` the self-host bundle, both from the committed `public/`
-directory. Regenerate it after a version bump: `python scripts/build_release.py --out public`.
+No second project needed — the bot deployment serves everything. `/` returns the
+dashboard (Postbot + chat + landing cards), `/api/*` the API,
+`/downloads/studybuddy-latest.zip` the self-host bundle, all from the committed
+`public/` directory. Regenerate it after a version bump:
+`python scripts/build_release.py --out public`.
+
+The dashboard chat stays locked until `DASHBOARD_PASSWORD` is set on the deployment.
+`APP_SECRET` (or `CRON_SECRET`) signs the session cookie.
 
 ## Troubleshooting
 
@@ -83,6 +89,7 @@ directory. Regenerate it after a version bump: `python scripts/build_release.py 
 |---|---|
 | Whole site returns `{"detail":"Not Found"}` | `vercel.json` must NOT have a catch-all rewrite to `/api/index`; the FastAPI preset already routes every path to the function while preserving the real URL |
 | `CRON_SECRET/WEBHOOK_SECRET not configured` (500) | The Vercel env var exists but has no value. Re-add it with the real value (Sensitive type), then redeploy |
+| Dashboard chat says it is not configured | Set `DASHBOARD_PASSWORD` (+ `APP_SECRET`) on the deployment, then reload |
 | Bot silent | TELEGRAM_CHAT_ID mismatch; tap Start on bot; check `getWebhookInfo` shows the `/api/telegram` URL; check webhook secret_token |
 | `/week` empty | CANVAS_TERM exact mismatch |
 | Token rejected | New Canvas token (password change/expiry) → rotate in Vercel + `.env` |

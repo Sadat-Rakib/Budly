@@ -37,6 +37,9 @@ EXCLUDE_DIRS = {
     ".vercel",
     "site",
     "dist",
+    ".v2c",
+    ".kilo",
+    ".qodo",
 }
 EXCLUDE_GLOBS = ["*.pyc", "*.pyo", ".DS_Store", ".env", ".env.*", "vercel.env", "*.log"]
 KEEP_FILES = {".env.example"}
@@ -66,19 +69,24 @@ def included(path: Path) -> bool:
 
 
 def collect(exclude_root: Path | None = None) -> list[Path]:
-    """Every bundled file, minus whatever directory the release is being written to.
+    """Every bundled file, minus the release's own downloads directory.
 
-    Without the exclusion a rebuild into a served directory (``--out public``) picks up
-    the previous run's zip and writes it inside the new one, so the bundle grows by
-    itself on every build.
+    Only ``<out>/downloads`` is skipped (the previous zips, which would otherwise be
+    written inside the new zip and make the bundle grow by itself on every rebuild).
+    The rest of ``public/`` -- the dashboard assets: mascots, fonts, app.js,
+    mascot.js, the filled index.html -- is *wanted* in the bundle, so a
+    self-hosted deployment serves a working dashboard out of the box.
     """
+    skip_dir: Path | None = None
+    if exclude_root is not None:
+        skip_dir = exclude_root / "downloads"
     out: list[Path] = []
     for p in ROOT.rglob("*"):
         if not p.is_file() or not included(p):
             continue
-        if exclude_root is not None:
+        if skip_dir is not None:
             try:
-                p.relative_to(exclude_root)
+                p.relative_to(skip_dir)
             except ValueError:
                 pass
             else:

@@ -88,6 +88,24 @@ class Settings(BaseSettings):
     cron_secret: SecretStr | None = None
     slack_webhook_url: SecretStr | None = None
 
+    # --- Web dashboard ---------------------------------------------------------
+    #: The password that unlocks the dashboard chat. Left unset, every API behind the
+    #: session cookie answers 503 and the mascot explains what to set. This is the whole
+    #: auth model for a personal deployment, where the Canvas token already lives in
+    #: the environment and there is exactly one person to let in.
+    dashboard_password: SecretStr | None = None
+    #: Signs the session cookie. Falls back to cron_secret so a deployment that already
+    #: generated one secret does not need a second one.
+    app_secret: SecretStr | None = None
+
+    @property
+    def session_secret(self) -> SecretStr | None:
+        return self.app_secret or self.cron_secret
+
+    @property
+    def dashboard_login_enabled(self) -> bool:
+        return self.dashboard_password is not None and self.session_secret is not None
+
     @property
     def slack_configured(self) -> bool:
         return self.slack_webhook_url is not None

@@ -26,9 +26,8 @@ Rules that still hold:
 - Answer first. Real dates, real numbers. No hedging, no "you may want to check".
 - Always use the tools. Never guess a deadline, a grade, or what an instructor said. If \
 a tool comes back empty, just say so — don't fill the gap with something plausible.
-- Keep it short. They're reading this on a phone. Two or three sentences usually does it.
-- Plain text only. No markdown — no **bold**, no headers, no backticks. Telegram shows \
-those as literal asterisks and it looks broken.
+- Keep it short. They're reading this on {surface}. Two or three sentences usually does it.
+- {formatting}
 - Dates like a person talks: "friday 11:59pm", "oct 15", "about 6 days out".
 - You can't submit, upload, or change anything. If they ask, tell them to do it in Canvas.
 
@@ -42,8 +41,26 @@ you which section is theirs, only talk about that one.
 Today is {today}. Times are {timezone}.
 """
 
+_TELEGRAM = (
+    "Plain text only. No markdown — no **bold**, no headers, no backticks. Telegram "
+    "shows those as literal asterisks and it looks broken."
+)
+_WEB = (
+    "Light markdown is fine — **bold**, links, and short lists render properly in the "
+    "web dashboard."
+)
 
-async def build_system_prompt(session: AsyncSession, settings: Settings) -> str:
+_SURFACES = {
+    "telegram": "a phone",
+    "web": "a dashboard chat",
+}
+
+
+async def build_system_prompt(
+    session: AsyncSession, settings: Settings, *, channel: str = "telegram"
+) -> str:
+    formatting = _TELEGRAM if channel == "telegram" else _WEB
+    surface = _SURFACES.get(channel, "a phone")
     courses = (
         await session.scalars(
             select(Course).where(Course.is_tracked, Course.is_active).order_by(Course.short_code)
@@ -53,6 +70,8 @@ async def build_system_prompt(session: AsyncSession, settings: Settings) -> str:
     now = datetime.now(settings.tz)
     prompt = _INSTRUCTIONS.format(
         name=f"{settings.user_name}'s" if settings.user_name else "a student's",
+        surface=surface,
+        formatting=formatting,
         today=f"{now:%A, %d %B %Y}",
         timezone=settings.user_timezone,
     )

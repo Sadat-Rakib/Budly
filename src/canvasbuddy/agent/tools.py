@@ -301,6 +301,181 @@ async def get_grades(
     }
 
 
+async def list_overdue(
+    session: AsyncSession, settings: Settings, course_code: str | None = None
+) -> dict:
+    """Unsubmitted work whose due date has already passed.
+
+    Shares the nudge's definition of missed, so chat and digest can never disagree
+    about what counts: published, submittable, no score, and past due.
+    """
+    from canvasbuddy.notify.builders import _is_missed
+
+    courses = await _tracked_courses(session)
+    target = _match_course(courses, course_code)
+    if course_code and target is None:
+        return {"error": f"No tracked course matching {course_code!r}."}
+
+    scope = [target] if target else courses
+    collapsed = await _live_assignments(session, settings, scope)
+
+    now = datetime.now(UTC)
+    overdue = []
+    for assignment, course, label in collapsed:
+        if not _is_missed(assignment, now):
+            continue
+        row = _assignment_row(assignment, course, settings)
+        if label:
+            row["your_section"] = label
+        overdue.append(row)
+
+    overdue.sort(key=lambda r: r["due_at"] or "")
+    return {"overdue": overdue, "count": len(overdue)}
+
+
+async def get_changes_since(
+    session: AsyncSession, settings: Settings, since: str | None = None
+) -> dict:
+    """Everything that changed since a moment: events plus fresh announcements.
+
+    This is the change-detection store being read back out. Event rows are written by
+    the sync's diff engine; announcements are listed directly because their arrival is
+    itself the change. Points tweaks and state flips are deliberately excluded -- they
+    are metadata noise in an answer to "what's new".
+    """
+    courses = await _tracked_courses(session)
+    by_id = {c.id: c for c in courses}
+
+    now = datetime.now(UTC)
+    if since:
+        try:
+            start = datetime.fromisoformat(since).replace(tzinfo=UTC)
+        except ValueError:
+            return {"error": f"Could not read {since!r} as a date. Use YYYY-MM-DD."}
+    else:
+        start = now - timedelta(days=1)
+
+    from canvasbuddy.models import Event, EventType
+
+    interesting = {
+        EventType.new_assignment,
+        EventType.due_date_changed,
+        EventType.assignment_removed,
+        EventType.new_announcement,
+    }
+    rows = (
+        await session.scalars(
+            select(Event)
+            .where(Event.created_at >= start, Event.type.in_(interesting))
+            .order_by(Event.created_at.desc())
+            .limit(30)
+        )
+    ).all()
+
+    changes: list[dict] = []
+    for row in rows:
+        course = None
+        if row.payload.get("course_code"):
+            course = _match_course(courses, row.payload["course_code"])
+        elif row.entity_type == "assignment":
+            assignment = await session.scalar(
+                select(Assignment).where(Assignment.canvas_id == row.entity_id)
+            )
+            if assignment is not None:
+                course = by_id.get(assignment.course_id)
+
+        entry: dict[str, Any] = {
+            "type": row.type.value if row.type else str(row.type),
+            "what": row.payload.get("name") or row.payload.get("title"),
+            "course": (course.short_code or course.code) if course else None,
+            "when": _local(row.created_at, settings),
+        }
+        if row.type == EventType.due_date_changed:
+            entry["changed"] = {
+                "from": _local(
+                    datetime.fromisoformat(row.payload["old_due_at"]).replace(tzinfo=UTC)
+                    if row.payload.get("old_due_at")
+                    else None,
+                    settings,
+                ),
+                "to": _local(
+                    datetime.fromisoformat(row.payload["new_due_at"]).replace(tzinfo=UTC)
+                    if row.payload.get("new_due_at")
+                    else None,
+                    settings,
+                ),
+            }
+        if row.type == EventType.new_announcement:
+            entry["url"] = row.payload.get("html_url")
+        changes.append(entry)
+
+    # The same new announcement can arrive as both an event and a direct announcement
+    # row; the event wins (it carries the payload), the listing skips the duplicate.
+    seen_announcements = {
+        row.entity_id for row in rows if row.type == EventType.new_announcement
+    }
+    fresh = (
+        await session.scalars(
+            select(Announcement)
+            .where(
+                Announcement.course_id.in_(by_id),
+                Announcement.posted_at.is_not(None),
+                Announcement.posted_at >= start,
+            )
+            .order_by(Announcement.posted_at.desc())
+            .limit(15)
+        )
+    ).all()
+    for row in fresh:
+        if row.canvas_id in seen_announcements:
+            continue
+        course = by_id[row.course_id]
+        changes.append(
+            {
+                "type": "new_announcement",
+                "what": row.title,
+                "course": course.short_code or course.code,
+                "when": _local(row.posted_at, settings),
+                "url": row.html_url,
+            }
+        )
+
+    return {
+        "since": _local(start, settings),
+        "today": datetime.now(settings.tz).date().isoformat(),
+        "changes": changes,
+    }
+
+
+async def search_assignments(
+    session: AsyncSession, settings: Settings, query: str, course_code: str | None = None
+) -> dict:
+    """Keyword search over assignment names, for "when is the robotics project due?".
+
+    Returned whether or not the deadline has passed: someone asking by name wants that
+    specific work, and "it was due last week" is a real answer.
+    """
+    courses = await _tracked_courses(session)
+    target = _match_course(courses, course_code)
+    if course_code and target is None:
+        return {"error": f"No tracked course matching {course_code!r}."}
+
+    scope = [target] if target else courses
+    collapsed = await _live_assignments(session, settings, scope)
+
+    needle = query.strip().lower()
+    if not needle:
+        return {"query": query, "matches": []}
+
+    matches = [
+        _assignment_row(assignment, course, settings)
+        for assignment, course, _ in collapsed
+        if needle in (assignment.name or "").lower()
+    ]
+    matches.sort(key=lambda r: r["due_at"] or "9999")
+    return {"query": query, "matches": matches[:10]}
+
+
 async def workload_forecast(
     session: AsyncSession, settings: Settings, week_offset: int = 0, weeks: int = 3
 ) -> dict:
@@ -670,6 +845,57 @@ TOOLS: list[Tool] = [
             "additionalProperties": False,
         },
         fn=list_contacts,
+    ),
+    Tool(
+        name="list_overdue",
+        description=(
+            "Unsubmitted work whose due date has already passed. Use for any question "
+            "about overdue, missed or late assignments."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {"course_code": _COURSE_PARAM},
+            "required": [],
+            "additionalProperties": False,
+        },
+        fn=list_overdue,
+    ),
+    Tool(
+        name="get_changes_since",
+        description=(
+            "What changed since a moment: new and removed assignments, moved deadlines, "
+            "and new announcements. Use for questions like 'what's new' or 'what "
+            "changed today'."
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "since": {
+                    "type": "string",
+                    "description": "ISO date or datetime, e.g. 2026-09-30. Defaults to yesterday.",
+                }
+            },
+            "required": [],
+            "additionalProperties": False,
+        },
+        fn=get_changes_since,
+    ),
+    Tool(
+        name="search_assignments",
+        description=(
+            "Find assignments by name, whether upcoming or past due. Use when the user "
+            "names a specific piece of work, e.g. 'when is the robotics project due?'"
+        ),
+        parameters={
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Words from the assignment title."},
+                "course_code": _COURSE_PARAM,
+            },
+            "required": ["query"],
+            "additionalProperties": False,
+        },
+        fn=search_assignments,
     ),
     Tool(
         name="workload_forecast",
