@@ -1,5 +1,6 @@
 """Release build: excludes .env, fails on secrets, placeholders, LICENSE, SHA."""
 
+import re
 import sys
 from pathlib import Path
 
@@ -56,7 +57,10 @@ def test_placeholders_and_license(tmp_path: Path):
     assert "Mir Sadat Bin Rakib" in lic
 
 
-def test_no_http_in_landing():
+def test_no_third_party_loads_in_landing():
+    """The page loads zero third-party resources: fonts, scripts and images are
+    self-hosted. Outbound *links* (<a href>) are fine -- clicking one is a user
+    decision, not a page load."""
     root = Path(__file__).resolve().parent.parent
     source = root / "site" / "src" / "index.html"
     if source.exists():
@@ -66,4 +70,11 @@ def test_no_http_in_landing():
         # Release zips ship the built page; the placeholder check only applies to
         # the source template.
         html = (root / "public" / "index.html").read_text(encoding="utf-8")
-    assert "http" not in html.lower(), "landing page must make no third-party requests"
+
+    loads = re.compile(
+        r"<script[^>]+src=\"http|<link[^>]+href=\"http|<img[^>]+src=\"http"
+        r"|<source[^>]+src=\"http|url\(\s*['\"]?http|@import\s+['\"]?http",
+        re.IGNORECASE,
+    )
+    hits = loads.findall(html)
+    assert not hits, f"landing page loads third-party resources: {hits[:3]}"
