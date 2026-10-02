@@ -80,12 +80,16 @@ Budly answers due-date and change questions from your synced data with no AI at 
 
 ```bash
 OPENROUTER_API_KEY=your-key
-CHAT_MODEL=anthropic/claude-sonnet-5
-AI_FALLBACK_MODEL_1=google/gemini-2.5-flash
-AI_FALLBACK_MODEL_2=openai/gpt-4o-mini
+CHAT_MODEL=nvidia/nemotron-3-super-120b-a12b:free
+AI_FALLBACK_MODEL_1=nvidia/nemotron-3-ultra-550b-a55b:free
+AI_FALLBACK_MODEL_2=google/gemma-4-31b-it:free
+GROQ_API_KEY=your-groq-key
+GROQ_MODEL=openai/gpt-oss-120b
 ```
 
-How fallback works: Budly tries the primary model; if the provider rate-limits, times out, has an outage, or the model is unavailable, it tries fallback 1, then fallback 2, and finally answers from structured data. A rejected API key stops immediately instead of wasting the fallbacks. The primary model is never skipped when it works.
+How the chain works: Budly walks its providers in order. First the OpenRouter models (the `:free` slugs cost nothing; check openrouter.ai/models for what is currently free and pick ones that list tool support), then Groq's free tier, and finally the deterministic answers from your own data. If a provider rate-limits, times out, has an outage, or a model disappears, the next one takes over automatically, so a busy day on one free tier never leaves you without an answer. A rejected API key stops immediately instead of wasting the fallbacks, and a working primary is never skipped.
+
+Free model slugs rotate: `nvidia/nemotron-3-super-120b-a12b:free` is what the shipped defaults were validated against, but treat the exact names as maintenance items, not promises.
 
 ### 7. Optional: Telegram or Slack
 

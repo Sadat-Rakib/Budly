@@ -96,6 +96,12 @@ class Settings(BaseSettings):
     #: invalid API key fails fast instead of burning through the list.
     ai_fallback_model_1: str | None = None
     ai_fallback_model_2: str | None = None
+    #: A second provider slot in the chain. Groq is OpenAI-compatible and has a
+    #: generous free tier, so a rate-limited OpenRouter day slides to Groq before
+    #: Budly gives up. Any OpenAI-compatible provider works the same way.
+    groq_api_key: SecretStr | None = None
+    groq_model: str = "openai/gpt-oss-120b"
+    groq_base_url: str = "https://api.groq.com/openai/v1"
     #: Syllabus and exam extraction. Runs a handful of times a term, so accuracy
     #: dwarfs cost.
     extraction_model: str = "anthropic/claude-opus-5"

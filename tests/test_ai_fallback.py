@@ -129,6 +129,53 @@ class TestFallbackChain:
         raise AssertionError("expected LLMError for a 401")
 
     @respx.mock
+    async def test_openrouter_invalid_model_400_falls_back(self) -> None:
+        """OpenRouter reports an unknown model as a 400 ("not a valid model ID"),
+        not a 404 -- observed live. The chain must treat it as model
+        unavailability and slide to the next entry, across providers."""
+        handler = recorder(
+            httpx.Response(400, json={"error": {"message": "no such model"}}),
+            httpx.Response(400, json={"error": {"message": "no such model"}}),
+            httpx.Response(400, json={"error": {"message": "no such model"}}),
+            httpx.Response(200, json=said("groq saved the day")),
+        )
+        respx.post(f"{OR}/chat/completions").mock(side_effect=handler)
+        groq_handler = recorder(httpx.Response(200, json=said("groq saved the day")))
+        respx.post("https://api.groq.com/openai/v1/chat/completions").mock(side_effect=groq_handler)
+
+        settings = make_settings(
+            groq_api_key="gsk-test",
+            groq_model="openai/gpt-oss-120b",
+        )
+        async with OpenRouterClient(settings) as llm:
+            choice = await llm.chat([{"role": "user", "content": "hi"}])
+
+        assert choice["message"]["content"] == "groq saved the day"
+        assert seen_models(handler) == [
+            "primary/model",
+            "fallback/one",
+            "fallback/two",
+        ]
+        assert seen_models(groq_handler) == ["openai/gpt-oss-120b"]
+
+    @respx.mock
+    async def test_genuine_400_still_fails_fast(self) -> None:
+        """A 400 that is NOT about model availability is a malformed request:
+        no fallback, immediate error."""
+        handler = recorder(
+            httpx.Response(400, json={"error": {"message": "messages must be an array"}}),
+        )
+        respx.post(f"{OR}/chat/completions").mock(side_effect=handler)
+        async with OpenRouterClient(make_settings()) as llm:
+            try:
+                await llm.chat([{"role": "user", "content": "hi"}])
+            except LLMError as exc:
+                assert not exc.retryable
+                assert len(seen_models(handler)) == 1
+                return
+        raise AssertionError("a malformed-request 400 should fail fast")
+
+    @respx.mock
     async def test_successful_primary_never_calls_fallbacks(self) -> None:
         handler = recorder(httpx.Response(200, json=said("primary says hi")))
         respx.post(f"{OR}/chat/completions").mock(side_effect=handler)

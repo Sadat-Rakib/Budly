@@ -40,6 +40,13 @@ notification scheduler in-process. No Supabase account, no cron service, no logi
 - Real Canvas data is never rewritten by demo data; demo courses use CSC-prefixed
   names.
 
+### Added (v1.0.1)
+
+- Cross-provider AI chain: Groq joins OpenRouter as a second free-tier provider.
+  OpenRouter reports unknown models as 400s (observed live); the chain now
+  classifies those as model-unavailable and slides to the next provider, so a
+  saturated free tier no longer costs an answer.
+
 ### Fixed
 
 - httpx request logging could print the Telegram bot token in URLs; those logs are

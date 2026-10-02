@@ -1,13 +1,20 @@
-"""OpenRouter client.
+"""The AI provider chain.
 
 Hand-rolled on ``httpx`` rather than the ``openai`` SDK, and the reason is a hard
 constraint rather than a preference: ``openai`` 3.x depends on ``httpx2``, a separate HTTP
 stack that cannot coexist cleanly with the ``httpx <0.29`` that python-telegram-bot pins.
 Taking the SDK would mean two HTTP clients, two connection pools and two TLS
-configurations in one image, to gain typed wrappers around a single endpoint whose
+configurations in one image, to gain typed wrappers around endpoints whose
 messages we have to hand back as plain dicts anyway.
 
-Three details of OpenRouter's tool calling are easy to get wrong and are handled here:
+The client walks a chain of OpenAI-compatible **provider endpoints** (PRD §21-22):
+the OpenRouter models first, then Groq, then whatever else a deployment adds. The
+point is the "never run out" property: every provider in the chain has its own
+free tier and its own rate-limit bucket, so a 429 on one slides to the next, and
+deterministic answers wait at the bottom no matter what.
+
+Three details of OpenAI-compatible tool calling are easy to get wrong and are
+handled here:
 
 * ``tools`` must be sent on **every** request, not just the first. OpenRouter revalidates
   the schema each call.
@@ -21,6 +28,7 @@ Three details of OpenRouter's tool calling are easy to get wrong and are handled
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from typing import Any
 
 import httpx
@@ -31,9 +39,9 @@ log = logging.getLogger(__name__)
 
 
 class LLMError(RuntimeError):
-    """Any unrecoverable failure talking to OpenRouter."""
+    """Any unrecoverable failure talking to an AI provider."""
 
-    #: False for failures where trying another model cannot help (a rejected key,
+    #: False for failures where trying another provider cannot help (a rejected key,
     #: a malformed request). True for the technical failures fallback exists for.
     retryable = False
     #: Human-readable failure class for logs ("rate limit", "timeout", ...).
@@ -55,7 +63,7 @@ class LLMTransientError(LLMError):
     """Rate limit, outage, temporary server error, or timeout.
 
     Exactly the classes the fallback chain exists for (PRD §23). An invalid key
-    or a malformed request is not here: retrying those with another model just
+    or a malformed request is not here: retrying those with another provider just
     burns quota on a failure that will repeat.
     """
 
@@ -63,24 +71,65 @@ class LLMTransientError(LLMError):
     reason = "transient"
 
 
+@dataclass(frozen=True)
+class ProviderEndpoint:
+    """One OpenAI-compatible endpoint in the fallback chain."""
+
+    provider: str  # "openrouter", "groq", ... -- for logs and headers
+    base_url: str
+    api_key: str
+    model: str
+
+    @property
+    def label(self) -> str:
+        return f"{self.provider}/{self.model}"
+
+
+def build_provider_chain(settings: Settings) -> list[ProviderEndpoint]:
+    """The ordered endpoint chain, from the deployment's configured keys.
+
+    Every provider with a key contributes its slot; the chain is what makes
+    "never run out of tokens" real -- separate providers mean separate free
+    tiers and separate rate-limit buckets.
+    """
+    chain: list[ProviderEndpoint] = []
+    if settings.openrouter_api_key is not None:
+        openrouter = settings.openrouter_api_key.get_secret_value()
+        for model in (
+            settings.chat_model,
+            settings.ai_fallback_model_1,
+            settings.ai_fallback_model_2,
+        ):
+            if model:
+                chain.append(
+                    ProviderEndpoint(
+                        "openrouter", settings.openrouter_base_url, openrouter, model
+                    )
+                )
+    if settings.groq_api_key is not None:
+        chain.append(
+            ProviderEndpoint(
+                "groq",
+                settings.groq_base_url,
+                settings.groq_api_key.get_secret_value(),
+                settings.groq_model,
+            )
+        )
+    return chain
+
+
 class OpenRouterClient:
+    """The AI client. The name is historical; it drives the whole endpoint chain."""
+
     def __init__(self, settings: Settings, client: httpx.AsyncClient | None = None) -> None:
-        if settings.openrouter_api_key is None:
-            raise LLMError("OPENROUTER_API_KEY is not set.")
         self._settings = settings
-        self._base_url = settings.openrouter_base_url.rstrip("/")
         self._owns_client = client is None
+        # No default Authorization header: every endpoint in the chain carries its
+        # own key, attached per request.
         self._client = client or httpx.AsyncClient(
             # A tool round-trip through a large model is slow; the connect timeout stays
             # short so a dead network still fails fast.
             timeout=httpx.Timeout(120.0, connect=10.0),
-            headers={
-                "Authorization": f"Bearer {settings.openrouter_api_key.get_secret_value()}",
-                # Optional -- they only affect how this app appears in OpenRouter's own
-                # activity log, which is worth having when debugging a bad turn.
-                "HTTP-Referer": "https://github.com/Sadat-Rakib/StudyBuddy",
-                "X-Title": "Budly",
-            },
         )
 
     async def __aenter__(self) -> OpenRouterClient:
@@ -98,10 +147,14 @@ class OpenRouterClient:
 
         OpenRouter's catalogue moves -- models are added, and capabilities are dropped
         from existing slugs. Without this check the failure surfaces as a bare 404 at the
-        exact moment someone asks the bot a question.
+        exact moment someone asks the bot a question. Only the OpenRouter primary is
+        checked; later chain entries fail over at request time by design.
         """
+        primary = build_provider_chain(self._settings)[:1]
+        if not primary:
+            return
         response = await self._client.get(
-            f"{self._base_url}/models", params={"supported_parameters": "tools"}
+            f"{primary[0].base_url}/models", params={"supported_parameters": "tools"}
         )
         if response.status_code >= 400:
             # A catalogue lookup failing is not a reason to refuse to start; the model
@@ -124,98 +177,136 @@ class OpenRouterClient:
         model: str | None = None,
         max_tokens: int | None = None,
     ) -> dict[str, Any]:
-        """One completion, with fallback on technical failures.
+        """One completion, with fallback across the provider chain.
 
-        The chain is primary → fallback 1 → fallback 2 (PRD §22). Only technical
-        failures move down the chain -- rate limit, outage, timeout, model gone.
-        A rejected key or malformed request raises immediately, and a successful
-        primary never touches the fallbacks (no wasted quota, PRD §23). When an
-        explicit ``model`` was requested, the chain is that model alone.
+        The chain is primary → fallback models → next provider (PRD §22). Only
+        technical failures move down the chain -- rate limit, outage, timeout,
+        model gone. A rejected key or malformed request raises immediately, and a
+        successful earlier entry never touches the later ones (no wasted quota,
+        PRD §23). When an explicit ``model`` was requested, only the primary
+        endpoint serves it.
         """
         if model:
-            chain: list[str] = [model]
-        else:
-            chain = [self._settings.chat_model]
-            chain += [
-                m
-                for m in (
-                    self._settings.ai_fallback_model_1,
-                    self._settings.ai_fallback_model_2,
+            primary = build_provider_chain(self._settings)[:1]
+            if not primary:
+                raise LLMError("OPENROUTER_API_KEY is not set.")
+            chain: list[ProviderEndpoint] = [
+                ProviderEndpoint(
+                    primary[0].provider, primary[0].base_url, primary[0].api_key, model
                 )
-                if m
             ]
+        else:
+            chain = build_provider_chain(self._settings)
+        if not chain:
+            raise LLMError("OPENROUTER_API_KEY is not set.")
 
-        for index, candidate in enumerate(chain):
+        for index, endpoint in enumerate(chain):
             try:
-                return await self._chat_once(
-                    candidate, messages, tools, max_tokens
-                )
+                return await self._chat_once(endpoint, messages, tools, max_tokens)
             except LLMError as exc:
                 last = index == len(chain) - 1
                 if not exc.retryable or last:
                     raise
                 log.warning(
-                    "AI %s %s failed (%s) -> falling back to %s",
-                    "model" if index else "primary model",
-                    candidate,
+                    "AI %s failed (%s) -> falling back to %s",
+                    endpoint.label,
                     exc.reason,
-                    chain[index + 1],
+                    chain[index + 1].label,
                 )
 
         raise LLMError("unreachable")  # pragma: no cover - loop always returns/raises
 
     async def _chat_once(
         self,
-        model: str,
+        endpoint: ProviderEndpoint,
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]] | None,
         max_tokens: int | None,
     ) -> dict[str, Any]:
-        """One attempt against one model."""
+        """One attempt against one endpoint."""
         import httpx as _httpx
 
+        headers = {"Authorization": f"Bearer {endpoint.api_key}"}
+        if endpoint.provider == "openrouter":
+            # Optional -- they only affect how this app appears in OpenRouter's own
+            # activity log, which is worth having when debugging a bad turn.
+            headers["HTTP-Referer"] = "https://github.com/Sadat-Rakib/StudyBuddy"
+            headers["X-Title"] = "Budly"
+
         body: dict[str, Any] = {
-            "model": model,
+            "model": endpoint.model,
             "messages": messages,
             "max_tokens": max_tokens or self._settings.agent_max_tokens,
         }
         if tools:
             body["tools"] = tools
-            # Keeps routing on a provider that honours every parameter sent. Without it,
-            # `tools` is only a soft preference and a fallback provider can quietly drop
-            # it, leaving the model to answer from nothing.
-            body["provider"] = {"require_parameters": True}
+            if endpoint.provider == "openrouter":
+                # Keeps routing on a provider that honours every parameter sent. Without it,
+                # `tools` is only a soft preference and a fallback provider can quietly drop
+                # it, leaving the model to answer from nothing. OpenRouter-specific.
+                body["provider"] = {"require_parameters": True}
 
         # Deliberately minimal. Unsupported parameters are silently dropped rather than
         # rejected -- claude-sonnet-5 does not advertise `temperature`, for instance --
         # so sending fewer of them is strictly safer.
         try:
             response = await self._client.post(
-                f"{self._base_url}/chat/completions", json=body
+                f"{endpoint.base_url.rstrip('/')}/chat/completions", json=body, headers=headers
             )
         except (_httpx.TimeoutException, _httpx.TransportError) as exc:
-            raise LLMTransientError(f"network failure talking to OpenRouter: {exc}") from exc
+            raise LLMTransientError(
+                f"network failure talking to {endpoint.provider}: {exc}"
+            ) from exc
 
         if response.status_code == 404:
             raise ModelUnsupportedError(
-                f"OpenRouter returned 404 for {model!r}. This usually means the "
-                f"model does not exist or cannot use tools."
+                f"{endpoint.provider} returned 404 for {endpoint.model!r}. This usually "
+                f"means the model does not exist or cannot use tools."
             )
         if response.status_code == 401:
-            raise LLMError("OpenRouter rejected the API key (401).")
+            raise LLMError(
+                f"{endpoint.provider} rejected the API key (401)."
+            )
+        if response.status_code == 400:
+            # OpenRouter reports an unknown model as a 400 ("not a valid model ID"),
+            # not a 404, and a :free model whose providers are all saturated comes
+            # back as "no allowed providers". Both are model-availability problems:
+            # exactly what the next chain entry exists for. Anything else in a 400
+            # is a malformed request and fails fast.
+            body_text = response.text[:600].lower()
+            model_markers = (
+                "not a valid model",
+                "no such model",
+                "model not found",
+                "does not exist",
+                "no allowed providers",
+                "no endpoints found",
+                "model is not available",
+            )
+            if any(marker in body_text for marker in model_markers):
+                raise ModelUnsupportedError(
+                    f"{endpoint.provider} has no usable {endpoint.model!r} (400)."
+                )
         if response.status_code == 429:
             raise LLMTransientError(
-                f"OpenRouter rate limit hit for {model!r} (429)."
+                f"{endpoint.provider} rate limit hit for {endpoint.model!r} (429)."
             )
         if response.status_code >= 500:
             raise LLMTransientError(
-                f"OpenRouter server error for {model!r} ({response.status_code})."
+                f"{endpoint.provider} server error for {endpoint.model!r} "
+                f"({response.status_code})."
             )
         if response.status_code >= 400:
-            raise LLMError(f"OpenRouter returned {response.status_code}: {response.text[:400]}")
+            raise LLMError(
+                f"{endpoint.provider} returned {response.status_code}: {response.text[:400]}"
+            )
 
         payload = response.json()
         choices = payload.get("choices") or []
         if not choices:
-            raise LLMError(f"OpenRouter returned no choices: {payload}")
+            raise LLMError(f"{endpoint.provider} returned no choices: {payload}")
         return choices[0]
+
+
+#: The PRD §21 interface name, kept as an alias: the chain *is* the AIProvider.
+AIProvider = OpenRouterClient
