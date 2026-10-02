@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import UTC, datetime, timedelta
 
@@ -47,8 +48,14 @@ def _parse_now_override(raw: str | None, tz) -> datetime | None:
     return dt.astimezone(UTC)
 
 
+_sync_lock: asyncio.Lock | None = None
+
+
 async def sync_now(settings: Settings) -> dict:
     """One forced sync pass. Returns {ok, summary|error, report}.
+
+    Guarded by a process-wide lock: a manual refresh landing mid-auto-sync waits
+    instead of running a second concurrent pass over Canvas (PRD §48).
 
     Also the observability hook: the last sync's stamp and any error are stashed in
     the settings table so the dashboard can show "last synced 4 minutes ago" or
@@ -144,7 +151,7 @@ async def _fanout_one_slot(
     """Per-channel own DB session with unique (local_date, channel, kind).
 
     The "web" channel has no external send: its row *is* the delivery, the digest the
-    dashboard card reads. It exists so StudyBuddy's own UI shows the same digest the
+    dashboard card reads. It exists so Budly's own UI shows the same digest the
     messaging channels got, under the same once-per-day guarantee.
     """
     results: dict[str, str] = {}
@@ -191,6 +198,33 @@ async def _fanout_one_slot(
             log.exception("fanout %s/%s failed", kind, ch)
             results[ch] = f"failed: {type(exc).__name__}"
     return results
+
+
+async def send_digest_now(settings: Settings) -> dict:
+    """Build, render and fan out today's digest to every enabled channel.
+
+    Used by `budly digest` and the scheduler's catch-up. The unique
+    (local_date, channel, kind) rows make it idempotent per day per channel.
+    """
+    from canvasbuddy.digest.builder import build_digest, render_digest
+
+    async with session_scope() as session:
+        content = await build_digest(session, settings)
+        tg_text = render_digest(content, settings)
+        sl_text = render_digest_slack(content, settings)
+        web_text = render_digest_web(content, settings)
+        local_date = content.local_date.date()
+        items = {"announcement_ids": content.announcement_ids, "trigger": "manual"}
+        results = await _fanout_one_slot(
+            settings,
+            kind="digest",
+            local_date=local_date,
+            telegram_payloads=[tg_text],
+            slack_payloads=[sl_text],
+            web_payloads=[web_text],
+            items=items,
+        )
+    return {"ok": True, "results": results, "empty": content.is_empty}
 
 
 async def run_tick(
@@ -278,7 +312,7 @@ async def run_tick(
                 if settings.telegram_bot_token and settings.telegram_chat_id:
                     n = TelegramNotifier(settings)
                     await n.send(
-                        "⚠️ StudyBuddy can't reach Canvas — the access token was rejected.\n\n"
+                        "⚠️ Budly can't reach Canvas — the access token was rejected.\n\n"
                         f"{sync_error}"
                     )
             except Exception:
@@ -397,7 +431,7 @@ async def run_tick(
                         n = TelegramNotifier(settings)
                         try:
                             await n.send(
-                                "StudyBuddy failed to send "
+                                "Budly failed to send "
                                 f"{','.join(results.keys())} on all channels."
                             )
                         except Exception:

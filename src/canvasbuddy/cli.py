@@ -26,7 +26,9 @@ from canvasbuddy.models import Course, Digest
 from canvasbuddy.sync.worker import sync_all
 
 app = typer.Typer(
-    no_args_is_help=True, add_completion=False, help="StudyBuddy — your term, in one place."
+    no_args_is_help=True,
+    add_completion=False,
+    help="Budly — your Canvas, watched. Ask questions, get updates, locally.",
 )
 courses_app = typer.Typer(
     no_args_is_help=True, help="Inspect and override which courses are tracked."
@@ -34,6 +36,7 @@ courses_app = typer.Typer(
 app.add_typer(courses_app, name="courses")
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
 def _force_utf8_output() -> None:
@@ -151,9 +154,13 @@ async def doctor() -> None:
             ok = False
             typer.secho(f"[FAIL] OpenRouter — {exc}", fg="red")
     else:
-        typer.secho("[warn] OpenRouter — not configured; chat disabled", fg="yellow")
+        typer.secho(
+            "[warn] OpenRouter - not configured; AI questions off;"
+            " due-date and change answers still work",
+            fg=typer.colors.YELLOW,
+        )
 
-    # --- StudyBuddy serverless checks ---
+    # --- legacy hosted-mode checks ---
     try:
         for role, spec in (
             ("digest", settings.digest_slot),
@@ -240,7 +247,7 @@ async def setup(
         return
 
     typer.echo(
-        "StudyBuddy setup — ~30 min. Values are validated as you go. Secrets are never echoed back."
+        "Budly setup — values are validated as you go. Secrets are never echoed back."
     )
     canvas_base = typer.prompt("Canvas base URL", default="https://canvas.ualberta.ca")
     canvas_term = typer.prompt("Canvas term (exact, e.g. Fall Term 2026)", default="Fall Term 2026")
@@ -431,33 +438,40 @@ async def digest(
         False, "--force", help="Send even if today's digest already went out."
     ),
 ) -> None:
-    """Build today's digest, and send it unless --dry-run."""
+    """Build today's digest and deliver it to every enabled channel."""
     settings = get_settings()
-    async with session_scope() as session:
-        content = await build_digest(session, settings)
-        body = render_digest(content, settings)
+    if dry_run:
+        async with session_scope() as session:
+            content = await build_digest(session, settings)
+            typer.echo(render_digest(content, settings))
+        typer.secho("(dry run - nothing was sent)", fg=typer.colors.YELLOW)
+        return
 
-        if dry_run:
-            typer.echo(body)
-            typer.secho("\n(dry run — nothing was sent)", fg="yellow")
-            return
-
-        if force:
-            existing = await session.scalar(
-                select(Digest).where(
-                    Digest.local_date == content.local_date.date(), Digest.kind == "morning"
+    if force:
+        # Clear today's rows on every channel so the send is genuinely fresh.
+        async with session_scope() as session:
+            existing = (
+                await session.scalars(
+                    select(Digest).where(Digest.local_date == datetime.now(settings.tz).date())
                 )
-            )
-            if existing:
-                await session.delete(existing)
-                await session.flush()
+            ).all()
+            for row in existing:
+                await session.delete(row)
 
-        sent = await _send_digest(session, settings, content, body)
+    from canvasbuddy.notify.service import send_digest_now
 
+    results = await send_digest_now(settings)
+    sent = [ch for ch, r in results["results"].items() if r == "sent"]
+    already = [ch for ch, r in results["results"].items() if r == "already_sent"]
     if sent:
-        typer.secho("Digest sent.", fg="green")
+        typer.secho(f"Digest sent via: {', '.join(sent)}.", fg=typer.colors.GREEN)
+    elif already:
+        typer.secho(
+            f"Today's digest already went out ({', '.join(already)}); nothing sent.",
+            fg=typer.colors.YELLOW,
+        )
     else:
-        typer.secho("Today's digest already went out; nothing sent.", fg="yellow")
+        typer.secho(f"Digest result: {results['results']}", fg=typer.colors.YELLOW)
 
 
 # ----------------------------------------------------------------------------- tick
@@ -592,14 +606,127 @@ async def extract(
 
 @app.command()
 def serve() -> None:
-    """Run the bot: Telegram polling plus the scheduled sync and digest.
+    """Legacy: run the Telegram polling bot with its own job queue.
 
-    This is the always-on entrypoint. It replaces `tick` as the deployed command -- the
-    same sync and digest run here, on the job queue, so there is no separate cron service.
+    Budly v1.0's normal entrypoint is `budly start` (dashboard + scheduler on
+    localhost). `serve` remains for people who prefer driving Budly from Telegram.
     """
     from canvasbuddy.bot import run
 
     run()
+
+
+@app.command()
+def start(
+    host: str = typer.Option(
+        "127.0.0.1", help="Bind address. Keep 127.0.0.1 unless you know you need more."
+    ),
+    port: int = typer.Option(8000, help="Port for the local dashboard."),
+) -> None:
+    """Run Budly: the local dashboard plus the scheduler, on your machine.
+
+    Opens http://127.0.0.1:<port> with the Bento dashboard and Postbot. The
+    scheduler sends morning/evening updates while Budly is running. No login:
+    a localhost-bound process is only reachable from your own computer. If you
+    deliberately bind to a public address, securing that is your responsibility.
+    """
+    if host not in {"127.0.0.1", "localhost", "::1"}:
+        typer.secho(
+            f"WARNING: binding to {host} exposes Budly (and its Canvas access) to your "
+            "network. Securing that deployment is your responsibility.",
+            fg=typer.colors.RED,
+        )
+    import uvicorn
+
+    from canvasbuddy.server import create_local_app
+
+    typer.echo(f"Budly v1.0 → http://{host}:{port}")
+    uvicorn.run(create_local_app(), host=host, port=port, log_level="info")
+
+
+# ------------------------------------------------------------------ tests for channels
+
+
+async def _send_channel_test(channel: str) -> None:
+    # Plain async helper: the @app.command wrappers below already provide the loop.
+    settings = get_settings()
+    if channel == "telegram":
+        if not settings.telegram_configured:
+            typer.secho(
+                "Telegram is not configured. Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID.",
+                fg=typer.colors.RED,
+            )
+            raise typer.Exit(1)
+        from canvasbuddy.notify.notifiers import TelegramNotifier
+
+        try:
+            await TelegramNotifier(settings).send(
+                "Budly is connected 🎓\nTelegram notifications are working."
+            )
+            typer.secho("[ok] Test message delivered to Telegram.", fg=typer.colors.GREEN)
+        except Exception as exc:  # noqa: BLE001
+            typer.secho(f"[FAIL] Telegram delivery failed: {exc}", fg=typer.colors.RED)
+            raise typer.Exit(1) from exc
+    else:
+        if not settings.slack_configured:
+            typer.secho("Slack is not configured. Set SLACK_WEBHOOK_URL.", fg=typer.colors.RED)
+            raise typer.Exit(1)
+        from canvasbuddy.notify.notifiers import SlackNotifier
+
+        try:
+            await SlackNotifier(settings).send(
+                "Budly is connected 🎓\nSlack notifications are working."
+            )
+            typer.secho("[ok] Test message delivered to Slack.", fg=typer.colors.GREEN)
+        except Exception as exc:  # noqa: BLE001
+            typer.secho(f"[FAIL] Slack delivery failed: {exc}", fg=typer.colors.RED)
+            raise typer.Exit(1) from exc
+
+
+@app.command("test-telegram")
+@_async_command
+async def test_telegram() -> None:
+    """Send the connection-test message to Telegram."""
+    await _send_channel_test("telegram")
+
+
+@app.command("test-slack")
+@_async_command
+async def test_slack() -> None:
+    """Send the connection-test message to Slack."""
+    await _send_channel_test("slack")
+
+
+@app.command("test-canvas")
+@_async_command
+async def test_canvas() -> None:
+    """Check the Canvas connection with one lightweight profile read."""
+    settings = get_settings()
+    if not settings.canvas_configured:
+        typer.secho(
+            "Canvas is not configured. Set CANVAS_BASE_URL and CANVAS_TOKEN in .env.",
+            fg=typer.colors.RED,
+        )
+        raise typer.Exit(1)
+    from canvasbuddy.canvas.client import CanvasError, TokenRevokedError, open_canvas_client
+
+    try:
+        async with open_canvas_client(settings) as client:
+            me = await client.get_self()
+        typer.secho(
+            f"[ok] Canvas connected successfully — {me.get('name')} (id {me.get('id')})",
+            fg=typer.colors.GREEN,
+        )
+    except TokenRevokedError as exc:
+        typer.secho(f"[FAIL] Budly couldn't connect to Canvas: {exc}", fg=typer.colors.RED)
+        raise typer.Exit(1) from exc
+    except CanvasError as exc:
+        typer.secho(
+            "[FAIL] Budly couldn't connect to Canvas. Check the Canvas URL and access "
+            f"token. ({exc})",
+            fg=typer.colors.RED,
+        )
+        raise typer.Exit(1) from exc
 
 
 # --------------------------------------------------------------------------- courses

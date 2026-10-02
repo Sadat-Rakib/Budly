@@ -107,7 +107,7 @@ class FakeSession:
 
 
 def course() -> Course:
-    c = Course(canvas_id=1, code="AUSTA 153H3", short_code="AUSTA 153", name="Data Analysis")
+    c = Course(canvas_id=1, code="CSC 153H3", short_code="CSC 153", name="Data Analysis")
     c.id = 1
     return c
 
@@ -152,61 +152,6 @@ def patch_tools(monkeypatch, **results) -> None:
         monkeypatch.setitem(real_tools, name, dc_replace(original, fn=fake))
 
 
-def auth_cookie(settings: Settings) -> dict[str, str]:
-    from canvasbuddy.web.session import mint_session
-
-    return {"Cookie": f"sb_session={mint_session(settings)}"}
-
-
-@pytest.mark.asyncio
-class TestAuthGate:
-    async def test_login_sets_cookie(self, app_env, client) -> None:
-        settings = app_env()
-        session = FakeSession()
-        async with await client(session, settings) as c:
-            response = await c.post("/api/login", json={"password": "sesame"})
-        assert response.status_code == 200
-        assert "sb_session=" in response.headers["set-cookie"]
-        assert "HttpOnly" in response.headers["set-cookie"]
-
-    async def test_wrong_password_is_401(self, app_env, client) -> None:
-        settings = app_env()
-        async with await client(FakeSession(), settings) as c:
-            response = await c.post("/api/login", json={"password": "nope"})
-        assert response.status_code == 401
-
-    async def test_not_configured_is_503(self, app_env, client) -> None:
-        settings = app_env(dashboard_password=None)
-        async with await client(FakeSession(), settings) as c:
-            response = await c.post("/api/login", json={"password": "x"})
-            assert response.status_code == 503
-            # And every protected route refuses too -- an unconfigured dashboard
-            # never leaks Canvas data just because the cookie check was skipped.
-            status = await c.get("/api/status", cookies=None)
-            assert status.status_code == 503
-
-    async def test_protected_routes_need_a_cookie(self, app_env, client) -> None:
-        settings = app_env()
-        async with await client(FakeSession(), settings) as c:
-            for method, path in (("GET", "/api/status"), ("POST", "/api/chat")):
-                if method == "GET":
-                    response = await c.get(path)
-                else:
-                    response = await c.post(path, json={"message": "hi"})
-                assert response.status_code == 401, path
-
-    async def test_garbage_cookie_is_401(self, app_env, client) -> None:
-        settings = app_env()
-        async with await client(FakeSession(), settings) as c:
-            response = await c.get("/api/status", headers={"Cookie": "sb_session=junk.junk"})
-            assert response.status_code == 401
-
-    async def test_logout_clears_cookie(self, app_env, client) -> None:
-        settings = app_env()
-        async with await client(FakeSession(), settings) as c:
-            response = await c.post("/api/logout")
-        assert "Max-Age=0" in response.headers["set-cookie"]
-
 
 @pytest.mark.asyncio
 class TestStatus:
@@ -216,15 +161,15 @@ class TestStatus:
             monkeypatch,
             list_upcoming={
                 "due": [
-                    {"course": "AUSTA 153", "title": "Quiz 5", "due_at": _iso_in_tz(settings, 0)},
-                    {"course": "AUSTA 153", "title": "Lab 2", "due_at": _iso_in_tz(settings, 3)},
+                    {"course": "CSC 153", "title": "Quiz 5", "due_at": _iso_in_tz(settings, 0)},
+                    {"course": "CSC 153", "title": "Lab 2", "due_at": _iso_in_tz(settings, 3)},
                 ]
             },
             list_overdue={"overdue": [], "count": 0},
         )
         session = FakeSession(courses=[course()], settings_rows={"last_sync_at": _utc_iso(0)})
         async with await client(session, settings) as c:
-            response = await c.get("/api/status", headers=auth_cookie(settings))
+            response = await c.get("/api/status")
 
         assert response.status_code == 200
         body = response.json()
@@ -233,7 +178,7 @@ class TestStatus:
         assert body["counts"]["due_week"] == 2
         assert body["counts"]["due_today"] == 1
         assert body["counts"]["overdue"] == 0
-        assert body["courses"][0]["code"] == "AUSTA 153"
+        assert body["courses"][0]["code"] == "CSC 153"
 
 
 @pytest.mark.asyncio
@@ -245,7 +190,7 @@ class TestMockModeSurfacing:
         )
         session = FakeSession(courses=[course()])
         async with await client(session, settings) as c:
-            response = await c.get("/api/status", headers=auth_cookie(settings))
+            response = await c.get("/api/status")
         assert response.status_code == 200
         assert response.json()["canvas"]["mock"] is True
 
@@ -257,18 +202,14 @@ class TestChat:
 
         async def fake_answer(session, settings, llm, message):
             return web_api.web_chat.ChatAnswer(
-                "You have 1 thing due this week:\n1. AUSTA 153 — Quiz 5",
+                "You have 1 thing due this week:\n1. CSC 153 — Quiz 5",
                 kind="due",
-                sources=[web_api.web_chat.Source("AUSTA 153", "Quiz 5", "2026-10-02T23:59", "https://canvas.example.edu/a/9")],
+                sources=[web_api.web_chat.Source("CSC 153", "Quiz 5", "2026-10-02T23:59", "https://canvas.example.edu/a/9")],
             )
 
         monkeypatch.setattr(web_api.web_chat, "answer_message", fake_answer)
         async with await client(FakeSession(), settings) as c:
-            response = await c.post(
-                "/api/chat",
-                json={"message": "What's due this week?"},
-                headers=auth_cookie(settings),
-            )
+            response = await c.post("/api/chat", json={"message": "What's due this week?"})
 
         assert response.status_code == 200
         body = response.json()
@@ -280,7 +221,7 @@ class TestChat:
         settings = app_env()
         async with await client(FakeSession(), settings) as c:
             huge = await c.post(
-                "/api/chat", json={"message": "x" * 3000}, headers=auth_cookie(settings)
+                "/api/chat", json={"message": "x" * 3000}
             )
         assert huge.status_code == 422
 
@@ -294,13 +235,13 @@ class TestDigests:
             local_date=today,
             channel="web",
             kind="digest",
-            body_md="**Due today**\n- AUSTA 153 — Quiz 5",
+            body_md="**Due today**\n- CSC 153 — Quiz 5",
             items={},
         )
         digest.sent_at = datetime.now(UTC)
         session = FakeSession(digest=digest)
         async with await client(session, settings) as c:
-            response = await c.get("/api/digests/latest", headers=auth_cookie(settings))
+            response = await c.get("/api/digests/latest")
 
         assert response.status_code == 200
         body = response.json()
@@ -311,7 +252,7 @@ class TestDigests:
         settings = app_env()
         session = FakeSession(courses=[])  # no courses -> empty live digest
         async with await client(session, settings) as c:
-            response = await c.get("/api/digests/latest", headers=auth_cookie(settings))
+            response = await c.get("/api/digests/latest")
 
         assert response.status_code == 200
         body = response.json()
@@ -322,7 +263,7 @@ class TestDigests:
         settings = app_env()
         session = FakeSession(courses=[])
         async with await client(session, settings) as c:
-            response = await c.post("/api/digests/generate", headers=auth_cookie(settings))
+            response = await c.post("/api/digests/generate")
         assert response.status_code == 200
         assert response.json()["result"] == "generated"
         assert session.added and session.added[0].channel == "web"

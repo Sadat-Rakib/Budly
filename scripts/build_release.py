@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the downloadable release for the landing page.
+"""Build the downloadable release for the showcase page.
 
 Outputs (default: site/dist):
   index.html                          site/src/index.html with
@@ -110,7 +110,7 @@ def scan(files: list[Path]) -> list[str]:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--slug", default="studybuddy")
+    ap.add_argument("--slug", default="budly")
     ap.add_argument("--out", default=str(ROOT / "site" / "dist"))
     args = ap.parse_args()
 

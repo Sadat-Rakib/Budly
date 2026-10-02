@@ -1,30 +1,34 @@
-"""HTTP endpoints for the web dashboard.
+"""HTTP endpoints for the local Budly dashboard.
 
-Route shape follows what the page actually needs, not a generic REST sketch:
+Budly binds to localhost and has no login: the person running the process is the
+person whose Canvas token is in the local configuration. There is nothing to
+authenticate against because there is nobody else on the other end of 127.0.0.1.
+(If you deliberately expose Budly to a network, securing that deployment is your
+job -- the README says so plainly.)
 
-* ``POST /api/login`` / ``POST /api/logout`` — the session cookie lifecycle.
-* ``GET  /api/status`` — everything the dashboard renders before the first chat turn:
-  connection health, last sync, course list, workload counts.
-* ``POST /api/sync`` — manual "Refresh Canvas".
-* ``POST /api/chat`` — one question, one grounded answer with sources.
-* ``GET  /api/digests/latest`` — today's digest for the dashboard card.
-* ``POST /api/digests/generate`` — build and store one now (idempotent per day).
+Routes follow what the page actually needs:
 
-Everything except login is behind the session cookie. The Canvas token never leaves
-the server: these handlers talk to it through the same CanvasClient the bot and cron
-use, and only the derived facts (course codes, due dates, links) ever reach the page.
+* ``GET  /api/status``  — everything the dashboard renders before the first chat
+  turn: configuration state, last sync, course list, workload counts.
+* ``POST /api/canvas/test`` — "Test connection" for the setup flow.
+* ``POST /api/sync``    — manual "Refresh Canvas".
+* ``POST /api/chat``    — one question, one grounded answer with sources.
+* ``GET  /api/digests/latest`` / ``POST /api/digests/generate`` — the in-app digest.
+
+Canvas tokens never appear in any of this. They stay in the local configuration
+and are only ever read server-side; the page sees derived facts only.
 """
 
 from __future__ import annotations
 
 import logging
-import time
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, field_validator
 from sqlalchemy import select
 
+from canvasbuddy.canvas.client import CanvasError, TokenRevokedError, open_canvas_client
 from canvasbuddy.config import get_settings
 from canvasbuddy.db import session_scope
 from canvasbuddy.digest.builder import build_digest
@@ -32,76 +36,15 @@ from canvasbuddy.models import Announcement, Course, Digest
 from canvasbuddy.notify.builders import render_digest_web
 from canvasbuddy.notify.service import sync_now
 from canvasbuddy.web import chat as web_chat
-from canvasbuddy.web.session import (
-    LoginGate,
-    check_password,
-    clear_cookie_header,
-    cookie_header,
-    mint_session,
-    verify_session,
-)
 
 log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api")
 
-_login_gate = LoginGate()
 
-_llm = None
-_llm_lock = None  # created lazily inside the running loop; see get_llm
-
-
-async def get_llm():
-    """The shared OpenRouter client for chat, built once per instance."""
-    global _llm, _llm_lock
-    import asyncio
-
-    if _llm_lock is None:
-        _llm_lock = asyncio.Lock()
-    if _llm is None:
-        from canvasbuddy.llm.openrouter import OpenRouterClient
-
-        async with _llm_lock:
-            if _llm is None:
-                settings = get_settings()
-                if not settings.openrouter_configured:
-                    return None
-                try:
-                    _llm = OpenRouterClient(settings)
-                except Exception as exc:  # noqa: BLE001
-                    log.warning("could not build LLM client: %s", exc)
-                    return None
-    return _llm
-
-
-def _session_cookie(request: Request) -> str | None:
-    return request.cookies.get("sb_session")
-
-
-def require_session(request: Request) -> None:
-    """Raise 401 unless the request carries a valid session cookie."""
-    settings = get_settings()
-    if not settings.dashboard_login_enabled:
-        raise HTTPException(503, "dashboard is not configured (set DASHBOARD_PASSWORD)")
-    if not verify_session(settings, _session_cookie(request)):
-        raise HTTPException(401, "sign in required")
-
-
-def _secure_cookie(request: Request) -> bool:
-    # Local development runs plain http; everything else gets the Secure flag.
-    host = (request.url.hostname or "").rsplit(".", 1)[0]
-    return not (request.url.hostname in {"localhost", "127.0.0.1", "0.0.0.0"} or host == "127")
-
-
-class LoginBody(BaseModel):
-    password: str
-
-    @field_validator("password")
-    @classmethod
-    def _not_blank(cls, v: str) -> str:
-        if not v.strip():
-            raise ValueError("password is required")
-        return v
+@router.get("/health")
+async def health() -> dict:
+    return {"ok": True}
 
 
 class ChatBody(BaseModel):
@@ -116,39 +59,9 @@ class ChatBody(BaseModel):
         return v
 
 
-@router.post("/login")
-async def login(body: LoginBody, request: Request, response: Response) -> dict:
-    settings = get_settings()
-    if not settings.dashboard_password:
-        raise HTTPException(503, "dashboard is not configured (set DASHBOARD_PASSWORD)")
-    if get_settings().session_secret is None:
-        raise HTTPException(503, "no session secret configured (set APP_SECRET)")
-
-    client_ip = request.client.host if request.client else "unknown"
-    now = time.monotonic()
-    if not _login_gate.allows(client_ip, now=now):
-        raise HTTPException(429, "too many attempts — wait five minutes and try again")
-
-    if not check_password(settings, body.password):
-        _login_gate.record_failure(client_ip, now=now)
-        raise HTTPException(401, "wrong password")
-
-    token = mint_session(settings)
-    response.headers["Set-Cookie"] = cookie_header(token, secure=_secure_cookie(request))
-    return {"ok": True}
-
-
-@router.post("/logout")
-async def logout(response: Response) -> dict:
-    response.headers["Set-Cookie"] = clear_cookie_header()
-    return {"ok": True}
-
-
 @router.get("/status")
 async def status(request: Request) -> dict:
-    require_session(request)
     settings = get_settings()
-
     async with session_scope() as session:
         from canvasbuddy.settings_store import get as settings_get
 
@@ -195,13 +108,15 @@ async def status(request: Request) -> dict:
         except ValueError:
             last_sync_at = None
 
-    host = settings.canvas_base_url.split("/api/v1")[0]
+    from canvasbuddy.scheduler import scheduler_running
+
+    host = settings.canvas_base_url.split("/api/v1")[0] if settings.canvas_base_url else ""
     return {
         "user_name": settings.user_name,
         "timezone": settings.user_timezone,
         "server_time": datetime.now(UTC).isoformat(),
         "canvas": {
-            "configured": True,
+            "configured": settings.canvas_configured,
             "mock": settings.canvas_mock_mode,
             "base_url": host,
             "last_sync_at": last_sync_at,
@@ -212,6 +127,7 @@ async def status(request: Request) -> dict:
             "telegram": settings.telegram_configured,
             "slack": settings.slack_configured,
         },
+        "scheduler": {"running": scheduler_running()},
         "slots": {
             "digest": settings.digest_slot,
             "nudge": settings.nudge_slot,
@@ -231,19 +147,47 @@ async def status(request: Request) -> dict:
     }
 
 
+@router.post("/canvas/test")
+async def test_canvas() -> dict:
+    """The setup flow's "Test connection": one lightweight profile read.
+
+    Never prints the token; every failure maps to a sentence a person can act on.
+    """
+    settings = get_settings()
+    if not settings.canvas_configured:
+        return {
+            "ok": False,
+            "message": "Canvas is not configured yet. Add your Canvas URL and access "
+            "token to .env, then restart Budly.",
+        }
+    try:
+        async with open_canvas_client(settings) as client:
+            me = await client.get_self()
+        name = me.get("name") or "your Canvas account"
+        return {"ok": True, "message": f"Canvas connected successfully — {name}."}
+    except TokenRevokedError:
+        return {
+            "ok": False,
+            "message": "Budly couldn't connect to Canvas: the access token was "
+            "rejected. Create a new token and try again.",
+        }
+    except CanvasError as exc:
+        log.info("canvas test failed: %s", exc)
+        return {
+            "ok": False,
+            "message": "Budly couldn't connect to Canvas. Check the Canvas URL and "
+            "access token.",
+        }
+
+
 @router.post("/sync")
-async def sync(request: Request) -> dict:
-    require_session(request)
+async def sync() -> dict:
     result = await sync_now(get_settings())
-    if not result["ok"]:
-        # The sync ran and failed; that is a report, not a crash.
-        return result
     return result
 
 
 @router.get("/courses")
-async def courses(request: Request) -> dict:
-    require_session(request)
+async def courses() -> dict:
     settings = get_settings()
     async with session_scope() as session:
         rows = (
@@ -275,8 +219,7 @@ async def courses(request: Request) -> dict:
 
 
 @router.post("/chat")
-async def chat(body: ChatBody, request: Request) -> dict:
-    require_session(request)
+async def chat(body: ChatBody) -> dict:
     settings = get_settings()
     llm = await get_llm()
     try:
@@ -285,21 +228,17 @@ async def chat(body: ChatBody, request: Request) -> dict:
     except Exception as exc:  # noqa: BLE001
         log.exception("chat failed")
         raise HTTPException(
-            503, "StudyBuddy's server hit a problem answering that. Try again in a moment."
+            503, "Budly hit a problem answering that. Try again in a moment."
         ) from exc
     return answer.as_dict()
 
 
 @router.get("/digests/latest")
-async def latest_digest(request: Request) -> dict:
-    require_session(request)
+async def latest_digest() -> dict:
     settings = get_settings()
     async with session_scope() as session:
         row = await session.scalar(
-            select(Digest)
-            .where(Digest.channel == "web")
-            .order_by(Digest.sent_at.desc())
-            .limit(1)
+            select(Digest).where(Digest.channel == "web").order_by(Digest.sent_at.desc()).limit(1)
         )
         today = datetime.now(settings.tz).date()
         if row is not None and row.local_date == today:
@@ -311,8 +250,8 @@ async def latest_digest(request: Request) -> dict:
                 "fresh": False,
             }
 
-        # No digest stored for today (cron hasn't fired yet, or this is a fresh
-        # deployment): build one live so the card is current rather than stale.
+        # No digest stored for today (the scheduler hasn't fired yet, or this is a
+        # fresh install): build one live so the card is current rather than stale.
         content = await build_digest(session, settings)
         return {
             "kind": "live",
@@ -324,9 +263,8 @@ async def latest_digest(request: Request) -> dict:
 
 
 @router.post("/digests/generate")
-async def generate_digest(request: Request) -> dict:
+async def generate_digest() -> dict:
     """Build and store today's web digest now. Idempotent per day."""
-    require_session(request)
     settings = get_settings()
     from sqlalchemy.exc import IntegrityError
 
@@ -350,4 +288,31 @@ async def generate_digest(request: Request) -> dict:
     return {"ok": True, "result": "generated", "body": body_md}
 
 
-__all__ = ["router", "require_session"]
+_llm = None
+_llm_lock = None  # created lazily inside the running loop
+
+
+async def get_llm():
+    """The shared OpenRouter client for chat, built once per process."""
+    global _llm, _llm_lock
+    import asyncio
+
+    if _llm_lock is None:
+        _llm_lock = asyncio.Lock()
+    if _llm is None:
+        from canvasbuddy.llm.openrouter import OpenRouterClient
+
+        async with _llm_lock:
+            if _llm is None:
+                settings = get_settings()
+                if not settings.openrouter_configured:
+                    return None
+                try:
+                    _llm = OpenRouterClient(settings)
+                except Exception as exc:  # noqa: BLE001
+                    log.warning("could not build LLM client: %s", exc)
+                    return None
+    return _llm
+
+
+__all__ = ["router", "get_llm"]

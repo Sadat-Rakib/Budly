@@ -7,12 +7,12 @@ user's zone only at the presentation layer.
 from __future__ import annotations
 
 import enum
+from datetime import UTC, datetime
 from datetime import date as date_t
-from datetime import datetime
 from datetime import time as time_t
 
 from sqlalchemy import (
-    ARRAY,
+    JSON,
     Boolean,
     Date,
     DateTime,
@@ -24,11 +24,34 @@ from sqlalchemy import (
     String,
     Text,
     Time,
+    TypeDecorator,
     UniqueConstraint,
     func,
 )
-from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+
+class UTCDateTime(TypeDecorator):
+    """Timestamps that survive both Postgres and SQLite.
+
+    Postgres keeps TIMESTAMPTZ; SQLite stores ISO strings and drops the offset.
+    The whole codebase writes UTC-aware values, so on read a naive value can only
+    mean UTC -- reattach it rather than handing callers a naive datetime that
+    ``.astimezone()`` would silently interpret as the machine's local zone.
+    """
+
+    impl = DateTime(timezone=True)
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        if value is not None and value.tzinfo is None:
+            value = value.replace(tzinfo=UTC)
+        return value
+
+    def process_result_value(self, value, dialect):
+        if value is not None and value.tzinfo is None:
+            value = value.replace(tzinfo=UTC)
+        return value
 
 
 class Base(DeclarativeBase):
@@ -54,17 +77,17 @@ class Course(Base):
     nickname: Mapped[str | None] = mapped_column(Text)
     term_name: Mapped[str | None] = mapped_column(String(128))
     term_id: Mapped[int | None]
-    term_start_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    term_end_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    term_start_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    term_end_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
 
     syllabus_html: Mapped[str | None] = mapped_column(Text)
-    syllabus_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    syllabus_synced_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     instructor_name: Mapped[str | None] = mapped_column(String(256))
     color_hex: Mapped[str | None] = mapped_column(String(7))
 
     #: Sections this user is actually enrolled in, e.g. MGAB03H3-F-LEC04-20269.
     #: A user can hold several enrolments in one course, so this is a list.
-    enrolled_sections: Mapped[list[str] | None] = mapped_column(ARRAY(Text))
+    enrolled_sections: Mapped[list[str] | None] = mapped_column(JSON)
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     #: Term filter. Non-term shells (orientation modules, residence) stay stored
@@ -72,11 +95,11 @@ class Course(Base):
     is_tracked: Mapped[bool] = mapped_column(Boolean, default=False)
     #: Null until the first sync completes. While null, diffing stays silent so a
     #: newly added course does not flood the digest with its entire backlog.
-    bootstrapped_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    bootstrapped_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+        UTCDateTime, server_default=func.now(), onupdate=func.now()
     )
 
     assignments: Mapped[list[Assignment]] = relationship(back_populates="course")
@@ -103,19 +126,19 @@ class Assignment(Base):
 
     name: Mapped[str] = mapped_column(Text)
     description_html: Mapped[str | None] = mapped_column(Text)
-    due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
-    unlock_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    lock_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    due_at: Mapped[datetime | None] = mapped_column(UTCDateTime, index=True)
+    unlock_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    lock_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
 
     points_possible: Mapped[float | None]
-    submission_types: Mapped[list[str] | None] = mapped_column(ARRAY(Text))
+    submission_types: Mapped[list[str] | None] = mapped_column(JSON)
     html_url: Mapped[str | None] = mapped_column(Text)
 
     has_submitted: Mapped[bool] = mapped_column(Boolean, default=False)
-    submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    submitted_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     score: Mapped[float | None]
     grade: Mapped[str | None] = mapped_column(String(32))
-    graded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    graded_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     workflow_state: Mapped[str | None] = mapped_column(String(32))
 
     #: True when this assignment appeared in /planner/items. Planner resolves section
@@ -128,10 +151,10 @@ class Assignment(Base):
     section_hint: Mapped[str | None] = mapped_column(String(32))
 
     first_seen_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
+        UTCDateTime, server_default=func.now()
     )
     last_changed_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
+        UTCDateTime, server_default=func.now()
     )
     is_deleted: Mapped[bool] = mapped_column(Boolean, default=False)
 
@@ -157,12 +180,12 @@ class Announcement(Base):
     title: Mapped[str] = mapped_column(Text)
     body_html: Mapped[str | None] = mapped_column(Text)
     body_text: Mapped[str | None] = mapped_column(Text)
-    posted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    posted_at: Mapped[datetime | None] = mapped_column(UTCDateTime, index=True)
     author_name: Mapped[str | None] = mapped_column(String(256))
     html_url: Mapped[str | None] = mapped_column(Text)
 
     first_seen_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
+        UTCDateTime, server_default=func.now()
     )
 
     course: Mapped[Course] = relationship(back_populates="announcements")
@@ -186,7 +209,7 @@ class File(Base):
     url: Mapped[str | None] = mapped_column(Text)
     content_hash: Mapped[str | None] = mapped_column(String(64), index=True)
     extracted_text: Mapped[str | None] = mapped_column(Text)
-    downloaded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    downloaded_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
 
 
 class ExamKind(enum.StrEnum):
@@ -226,9 +249,9 @@ class Exam(Base):
     confidence: Mapped[float | None] = mapped_column(Numeric(3, 2))
     confirmed_by_user: Mapped[bool] = mapped_column(Boolean, default=False)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+        UTCDateTime, server_default=func.now(), onupdate=func.now()
     )
 
 
@@ -250,11 +273,11 @@ class Event(Base):
     type: Mapped[EventType] = mapped_column(Enum(EventType, name="event_type"), index=True)
     entity_type: Mapped[str] = mapped_column(String(32))
     entity_id: Mapped[int] = mapped_column(Integer, index=True)
-    payload: Mapped[dict] = mapped_column(JSONB, default=dict)
+    payload: Mapped[dict] = mapped_column(JSON, default=dict)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, server_default=func.now())
     #: Null means not yet included in a digest.
-    notified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    notified_at: Mapped[datetime | None] = mapped_column(UTCDateTime, index=True)
 
 
 class ChatMessage(Base):
@@ -266,8 +289,8 @@ class ChatMessage(Base):
     channel: Mapped[str] = mapped_column(String(32))
     role: Mapped[str] = mapped_column(String(16))
     content: Mapped[str] = mapped_column(Text)
-    tool_calls: Mapped[dict | None] = mapped_column(JSONB)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    tool_calls: Mapped[dict | None] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, server_default=func.now())
 
 
 class Contact(Base):
@@ -288,7 +311,7 @@ class Contact(Base):
     source: Mapped[str] = mapped_column(String(32), default="syllabus")
     source_quote: Mapped[str | None] = mapped_column(Text)
     confirmed_by_user: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, server_default=func.now())
 
     __table_args__ = (UniqueConstraint("course_id", "email", name="uq_contact_per_course"),)
 
@@ -301,11 +324,11 @@ class ManualItem(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     course_id: Mapped[int | None] = mapped_column(ForeignKey("courses.id"), index=True)
     title: Mapped[str] = mapped_column(Text)
-    due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    due_at: Mapped[datetime | None] = mapped_column(UTCDateTime, index=True)
     kind: Mapped[str] = mapped_column(String(32), default="task")
     notes: Mapped[str | None] = mapped_column(Text)
     done: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(UTCDateTime, server_default=func.now())
 
 
 class Setting(Base):
@@ -320,7 +343,7 @@ class Setting(Base):
     key: Mapped[str] = mapped_column(String(64), primary_key=True)
     value: Mapped[str | None] = mapped_column(Text)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+        UTCDateTime, server_default=func.now(), onupdate=func.now()
     )
 
 
@@ -333,9 +356,9 @@ class Digest(Base):
     channel: Mapped[str] = mapped_column(String(32))
     kind: Mapped[str] = mapped_column(String(32), default="morning")
 
-    sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    sent_at: Mapped[datetime] = mapped_column(UTCDateTime, server_default=func.now())
     body_md: Mapped[str] = mapped_column(Text)
-    items: Mapped[dict] = mapped_column(JSONB, default=dict)
+    items: Mapped[dict] = mapped_column(JSON, default=dict)
 
     __table_args__ = (
         # Makes a double send impossible at the database level rather than merely

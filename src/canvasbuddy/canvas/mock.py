@@ -123,7 +123,7 @@ def build_fixture_world(
 
     # -- courses -----------------------------------------------------------
     world.courses = [
-        course(990001, "AUSTA 153H3", "Introduction to Data Analysis"),
+        course(990001, "CSC 153H3", "Introduction to Data Analysis"),
         course(990002, "COMP 214H3", "Databases and Web Applications"),
         course(990003, "MATH 120H3", "Calculus II"),
     ]
@@ -144,7 +144,7 @@ def build_fixture_world(
         ]
 
     # -- assignments ---------------------------------------------------------
-    # AUSTA 153: the full story — overdue, due today, due this week, completed
+    # CSC 153: the full story — overdue, due today, due this week, completed
     # and graded, plus undated graded work.
     world.assignments[990001] = [
         assignment(

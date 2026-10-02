@@ -1,7 +1,7 @@
 [project]
 name = "canvasbuddy"
-version = "0.2.0"
-description = "StudyBuddy — your Canvas courses in Telegram and Slack. Morning digest, evening nudges, Saturday review."
+version = "1.0.0"
+description = "Budly — a local-first Canvas companion. Ask about your courses, get morning and evening updates."
 authors = [{ name = "Mir Sadat Bin Rakib" }]
 readme = "README.md"
 requires-python = ">=3.12"
@@ -28,9 +28,13 @@ dependencies = [
     "python-docx>=1.1",
     "olefile>=0.47",
     "fastapi>=0.115",
+    "aiosqlite>=0.22.1",
+    "tzlocal>=5.4.4",
+    "uvicorn>=0.54.0",
 ]
 
 [project.scripts]
+budly = "canvasbuddy.cli:app"
 canvasbuddy = "canvasbuddy.cli:app"
 
 [dependency-groups]

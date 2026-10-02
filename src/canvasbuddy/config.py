@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from pathlib import Path
 from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
 
@@ -10,12 +11,39 @@ from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-class Settings(BaseSettings):
-    """Every knob StudyBuddy has. Nothing is hardcoded to a single institution."""
+def _local_timezone_name() -> str:
+    """The machine's IANA timezone name, for the default digest schedule.
 
-    # env_ignore_empty: people paste the whole .env.example block into Railway with the
-    # optional lines left blank. A blank line must mean "not set", not "set to ''" --
-    # otherwise an empty OPENROUTER_API_KEY switches chat on with no key.
+    tzlocal handles the Windows-to-IANA mapping that the standard library does not.
+    If detection somehow fails, the developer's own zone is the fallback rather
+    than UTC, because a 7:00 digest silently landing at 1:00 is the kind of bug a
+    user never reports and always remembers.
+    """
+    try:
+        import tzlocal
+
+        return tzlocal.get_localzone_name()
+    except Exception:  # noqa: BLE001 - detection must never break startup
+        return "America/Edmonton"
+
+
+def _default_database_url() -> str:
+    """Local-first storage: a SQLite file in the user's home directory.
+
+    No account, no server, no Docker. Setting DATABASE_URL to a Postgres DSN
+    still works for people who already run one (the legacy hosted mode).
+    """
+    data_dir = Path.home() / ".budly"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    return f"sqlite+aiosqlite:///{(data_dir / 'budly.db').as_posix()}"
+
+
+class Settings(BaseSettings):
+    """Every knob Budly has. Nothing is hardcoded to a single institution."""
+
+    # env_ignore_empty: people paste the whole .env.example block into their .env with
+    # the optional lines left blank. A blank line must mean "not set", not "set to
+    # ''" -- otherwise an empty OPENROUTER_API_KEY switches chat on with no key.
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", extra="ignore", env_ignore_empty=True
     )
@@ -23,20 +51,30 @@ class Settings(BaseSettings):
     # --- Canvas -------------------------------------------------------------
     #: Your school's Canvas address. The plain web address from the browser works
     #: (https://myschool.instructure.com) -- /api/v1 is appended if it's missing.
-    canvas_base_url: str
-    canvas_token: SecretStr
+    #: Optional so Budly can start before it is configured; the dashboard shows
+    #: what is missing instead of crashing.
+    canvas_base_url: str = ""
+    canvas_token: SecretStr | None = None
     canvas_term: str = "2026 Fall"
     #: Serve built-in fixture courses instead of calling Canvas. For local
     #: development and demos without a Canvas account. Never enable this on a
     #: production deployment: syncs then write fixture data, and the dashboard
     #: shows a Demo data badge so it can never pass silently.
     canvas_mock_mode: bool = False
+    #: Minutes between automatic background syncs while Budly runs. The local
+    #: scheduler owns this loop; manual "Refresh Canvas" always works regardless.
+    canvas_sync_interval_minutes: int = Field(default=30, ge=5, le=1440)
+
+    @property
+    def canvas_configured(self) -> bool:
+        return bool(self.canvas_base_url and self.canvas_token)
 
     # --- Database -----------------------------------------------------------
-    database_url: str
-    #: Optional schema isolation (e.g. "canvasmock" for a throwaway mock-mode run).
-    #: Empty means the database default. Every connection then resolves unqualified
-    #: tables inside that schema, leaving the public schema untouched.
+    #: Local SQLite by default (see _default_database_url). A Postgres DSN keeps
+    #: the legacy hosted mode working for people who already run one.
+    database_url: str = Field(default_factory=_default_database_url)
+    #: Optional schema isolation for Postgres (e.g. a throwaway demo schema).
+    #: Empty means the database default. Ignored on SQLite.
     database_search_path: str = ""
 
     # --- Telegram -----------------------------------------------------------
@@ -45,14 +83,20 @@ class Settings(BaseSettings):
 
     # --- LLM ----------------------------------------------------------------
     # Routed through OpenRouter, which is OpenAI-compatible, so the same settings work
-    # for any model it fronts. Slugs are pinned exactly rather than using a `~...latest`
-    # alias: a floating alias silently changing model underneath an agent loop is a
-    # miserable thing to debug.
+    # for any model it fronts (and for any other OpenAI-compatible provider by
+    # overriding OPENROUTER_BASE_URL). Slugs are pinned exactly rather than using a
+    # `~...latest` alias: a floating alias silently changing model underneath an agent
+    # loop is a miserable thing to debug.
     openrouter_api_key: SecretStr | None = None
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
-    #: The chat agent. Must support tool calling -- checked at startup.
+    #: The primary chat model. Must support tool calling.
     chat_model: str = "anthropic/claude-sonnet-5"
-    #: Syllabus and exam extraction (P2). Runs a handful of times a term, so accuracy
+    #: Fallbacks for technical failures only (rate limit, outage, timeout, model
+    #: gone). Tried in order; a successful primary never triggers them, and an
+    #: invalid API key fails fast instead of burning through the list.
+    ai_fallback_model_1: str | None = None
+    ai_fallback_model_2: str | None = None
+    #: Syllabus and exam extraction. Runs a handful of times a term, so accuracy
     #: dwarfs cost.
     extraction_model: str = "anthropic/claude-opus-5"
     #: Transcribes voice notes. Must accept audio input -- OpenRouter lists 46 such
@@ -73,15 +117,16 @@ class Settings(BaseSettings):
     # --- Behaviour ----------------------------------------------------------
     #: What the assistant calls you. Optional.
     user_name: str | None = None
-    #: A tz database name, e.g. "America/Edmonton" or "America/Toronto".
-    user_timezone: str = "America/Edmonton"
+    #: A tz database name, e.g. "America/Edmonton" or "Asia/Dhaka". Defaults to the
+    #: machine's own zone; set it explicitly on a server.
+    user_timezone: str = Field(default_factory=_local_timezone_name)
     digest_hour: int = Field(default=7, ge=0, le=23)
     nudge_hour: int = Field(default=20, ge=0, le=23)
     # PRD open question 2: running averages daily may cost more anxiety than they
     # return in value. Off by default; the data is stored either way.
     show_grades_in_digest: bool = False
 
-    # --- Notifier slots (serverless cron) -------------------------------------
+    # --- Notification slots (local scheduler; legacy hosted cron reads these too) --
     #: Empty string disables that role. Validated at startup via slots.parse_slot.
     digest_slot: str = "daily@07:00"
     nudge_slot: str = "daily@20:00"
@@ -92,28 +137,12 @@ class Settings(BaseSettings):
     review_lookback_days: int = Field(default=7, ge=1, le=30)
     review_lookahead_days: int = Field(default=7, ge=1, le=30)
 
-    # --- Serverless auth + Slack ----------------------------------------------
+    # --- Legacy hosted adapters (Telegram webhook on Vercel) -------------------
+    #: These protect the optional hosted webhook/cron endpoints. The local app
+    #: does not use them: it binds to localhost and needs no secrets of its own.
     webhook_secret: SecretStr | None = None
     cron_secret: SecretStr | None = None
     slack_webhook_url: SecretStr | None = None
-
-    # --- Web dashboard ---------------------------------------------------------
-    #: The password that unlocks the dashboard chat. Left unset, every API behind the
-    #: session cookie answers 503 and the mascot explains what to set. This is the whole
-    #: auth model for a personal deployment, where the Canvas token already lives in
-    #: the environment and there is exactly one person to let in.
-    dashboard_password: SecretStr | None = None
-    #: Signs the session cookie. Falls back to cron_secret so a deployment that already
-    #: generated one secret does not need a second one.
-    app_secret: SecretStr | None = None
-
-    @property
-    def session_secret(self) -> SecretStr | None:
-        return self.app_secret or self.cron_secret
-
-    @property
-    def dashboard_login_enabled(self) -> bool:
-        return self.dashboard_password is not None and self.session_secret is not None
 
     @property
     def slack_configured(self) -> bool:
@@ -135,9 +164,11 @@ class Settings(BaseSettings):
 
         Asking a non-technical user to append /api/v1 is asking for a typo, so only the
         host is kept and the API path is always rebuilt. A pasted dashboard or course
-        link therefore works too.
+        link therefore works too. Empty stays empty: Budly can start unconfigured.
         """
         v = v.strip()
+        if not v:
+            return ""
         if "://" not in v:
             v = "https://" + v
         parts = urlsplit(v)
@@ -146,11 +177,14 @@ class Settings(BaseSettings):
     @field_validator("database_url")
     @classmethod
     def _require_async_driver(cls, v: str) -> str:
-        """Supabase/Vercel hand out sync URLs; SQLAlchemy's async engine needs asyncpg.
+        """Normalise whatever the user pasted into a driver SQLAlchemy can use.
 
-        Also strips Neon-only params (sslmode/channel_binding) and keeps
-        ?ssl=require for asyncpg compatibility.
+        Supabase/Vercel hand out sync URLs; the async engine needs asyncpg, so those
+        get rewritten. SQLite URLs (the local default) pass through untouched, as do
+        Neon-only params that asyncpg does not understand.
         """
+        if v.startswith("sqlite"):
+            return v
         # Neon alternative: strip params asyncpg does not understand.
         if "channel_binding=" in v:
             v = v.replace("channel_binding=require", "").replace("channel_binding", "")

@@ -2,15 +2,15 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>StudyBuddy: ask your Canvas. Morning and evening updates, on the web and in Telegram.</title>
+<title>Budly: watch Canvas. Ask anything. Local-first.</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="description" content="Connect Canvas once. Ask StudyBuddy what's due, what changed, and what needs doing — on the web, on Telegram, on Slack. Free, self-hosted, read-only.">
-<meta property="og:title" content="StudyBuddy: ask your Canvas.">
-<meta property="og:description" content="Morning digest, evening nudges, Saturday review, and a mascot that knows your courses. Free. Self-hosted. Read-only Canvas.">
+<meta name="description" content="Budly runs on your computer, watches your Canvas account, and answers questions about your courses. Morning and evening updates, optional Telegram and Slack. Open source.">
+<meta property="og:title" content="Budly: watch Canvas. Ask anything.">
+<meta property="og:description" content="A local-first Canvas companion: Postbot, morning and evening updates, and answers grounded in your own courses.">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:title" content="StudyBuddy: ask your Canvas.">
-<meta name="twitter:description" content="Morning digest, evening nudges, Saturday review. Free. Self-hosted.">
+<meta name="twitter:title" content="Budly: watch Canvas. Ask anything.">
+<meta name="twitter:description" content="A local-first Canvas companion with a mascot that knows your courses.">
 <link rel="icon" href="data:,📚">
 <script>
 (function () {
@@ -188,7 +188,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 9rem;
-  padding: 8rem 170rem 6rem 0;
+  padding: 8rem 205rem 6rem 0;
   scrollbar-width: thin;
   scrollbar-color: rgba(21,32,26,.18) transparent;
 }
@@ -328,48 +328,6 @@ body {
   font-weight: 700;
   color: #7a5410;
 }
-.authrow {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 8rem;
-  margin: 7rem 0 0 0;
-  background: #fff;
-  border-radius: 999rem;
-  box-shadow: 0 4rem 14rem rgba(64,74,44,.14);
-  padding: 6rem 6rem 6rem 20rem;
-}
-.authrow input {
-  flex: 1;
-  border: 0; outline: none; background: transparent;
-  font: inherit;
-  font-size: 14rem;
-  letter-spacing: -.014em;
-  color: #141414;
-  padding: 6rem 0;
-}
-.authrow input::placeholder { color: #8c9a84; }
-.authrow button {
-  flex: none;
-  height: 42rem;
-  border: 0; border-radius: 999rem;
-  background: linear-gradient(145deg, #6f9b4c 0%, #55813a 100%);
-  color: #fff;
-  font: inherit;
-  font-size: 13rem;
-  font-weight: 700;
-  padding: 0 20rem;
-  cursor: pointer;
-  box-shadow: 0 3rem 9rem rgba(64,94,40,.30);
-}
-.authrow button:focus-visible { outline: 2.4rem solid rgba(95,139,62,.55); outline-offset: 2rem; }
-.authnote {
-  flex: none;
-  margin: 8rem 0 0 45rem;
-  font-size: 12rem;
-  color: #7a4a3a;
-  min-height: 0;
-}
 
 /* ----------------------------------------------------- card 4 · insights */
 .insights {
@@ -456,7 +414,7 @@ body {
 /* -------------------------------------------------- entrance: choreography */
 .entrance-run .card, .entrance-run .toast-wrap, .entrance-run .chip-row,
 .entrance-run .chip-slack, .entrance-run .bot,
-.entrance-run .chatlog, .entrance-run .askbar, .entrance-run .authrow,
+.entrance-run .chatlog, .entrance-run .askbar,
 .entrance-run .promptchips, .entrance-run .statusline,
 .entrance-run .tag, .entrance-run .chart, .entrance-run .bar-search {
   will-change: opacity, translate, scale, clip-path;
@@ -509,7 +467,6 @@ body {
 .entrance-run .bot          { animation: interface-settle .84s cubic-bezier(.16,1,.3,1) .42s; }
 .entrance-run .chatlog      { animation: content-rise .54s cubic-bezier(.16,1,.3,1) .60s; }
 .entrance-run .askbar       { animation: detail-settle .60s cubic-bezier(.16,1,.3,1) .72s; }
-.entrance-run .authrow      { animation: detail-settle .60s cubic-bezier(.16,1,.3,1) .72s; }
 .entrance-run .promptchips  { animation: detail-settle .58s cubic-bezier(.16,1,.3,1) .78s; }
 .entrance-run .statusline   { animation: detail-settle .54s cubic-bezier(.16,1,.3,1) .96s; }
 .entrance-run .toast-wrap    { animation: toast-arrive .62s cubic-bezier(.16,1,.3,1) .38s; }
@@ -595,7 +552,7 @@ body {
   .motion-pending .card { opacity: 1; visibility: visible; }
   .entrance-run .card, .entrance-run .toast-wrap, .entrance-run .chip-row,
   .entrance-run .chip-slack, .entrance-run .bot,
-  .entrance-run .chatlog, .entrance-run .askbar, .entrance-run .authrow,
+  .entrance-run .chatlog, .entrance-run .askbar,
   .entrance-run .promptchips, .entrance-run .statusline,
   .entrance-run .tag, .entrance-run .chart, .entrance-run .bar-search { animation: none !important; }
 }
@@ -608,7 +565,7 @@ body {
 </head>
 <body>
 
-<main class="stage" role="main" aria-label="StudyBuddy feature overview">
+<main class="stage" role="main" aria-label="Budly feature overview">
 
   <!-- CARD 1 · morning digest toast -->
   <section class="card notif" aria-label="Morning digest notification">
@@ -627,7 +584,7 @@ body {
         </svg>
         <div class="toast-copy">
           <strong id="toast-title">Digest sent!</strong>
-          <span id="toast-body">3 due this week · AUMAT quiz Oct 1 · 2 new posts</span>
+          <span id="toast-body">3 due this week · CSC quiz Oct 1 · 2 new posts</span>
         </div>
         <span class="toast-time" id="toast-time">7:00 AM</span>
       </div>
@@ -637,7 +594,7 @@ body {
   <!-- CARD 2 · connect your stack -->
   <section class="card connect" aria-label="Your stack">
     <h2>Connect your<br>courses now.</h2>
-    <p class="sub">Read-only, self-hosted, $0/month to run.</p>
+    <p class="sub">Runs on your computer. Read-only. No Budly account, ever.</p>
     <div class="chips">
       <div class="chip-row r1">
         <span class="chip">Canvas LMS
@@ -692,23 +649,18 @@ body {
   </section>
 
   <!-- CARD 3 · hero: Postbot + Canvas chat -->
-  <section class="card automate" aria-label="Ask StudyBuddy about your Canvas">
+  <section class="card automate" aria-label="Ask Budly about your Canvas">
     <div class="copy">
-      <h1>Hey, I'm <span class="g">StudyBuddy</span>.<br>I watch Canvas<br>so you don't have to.</h1>
-      <p class="sub">Connect Canvas once. Ask about deadlines, announcements, or what changed today.</p>
+      <h1>Hey, I'm <span class="g">Budly</span>.<br>I watch Canvas<br>so you don't have to.</h1>
+      <p class="sub">Connect Canvas once. Ask about assignments, deadlines, announcements or what changed today.</p>
     </div>
     <div class="botzone">
-      <div class="bot" id="postbot" role="img" aria-label="Postbot, the StudyBuddy mascot"></div>
-      <div class="chatlog" id="chatlog" aria-live="polite" aria-label="Conversation with StudyBuddy"></div>
+      <div class="bot" id="postbot" role="img" aria-label="Postbot, the Budly mascot"></div>
+      <div class="chatlog" id="chatlog" aria-live="polite" aria-label="Conversation with Budly"></div>
       <form class="askbar" id="askform" hidden>
-        <textarea id="askinput" rows="1" placeholder="Ask StudyBuddy about your Canvas…" aria-label="Ask StudyBuddy about your Canvas"></textarea>
+        <textarea id="askinput" rows="1" placeholder="Ask Budly about your Canvas…" aria-label="Ask Budly about your Canvas"></textarea>
         <button type="submit" id="asksend" aria-label="Send question">↑</button>
       </form>
-      <form class="authrow" id="authform" hidden>
-        <input type="password" id="authinput" placeholder="Dashboard password…" aria-label="Dashboard password" autocomplete="current-password">
-        <button type="submit">Sign in</button>
-      </form>
-      <p class="authnote" id="authnote" role="status"></p>
     </div>
     <div class="promptchips" aria-label="Suggested questions">
       <button type="button" class="pchip" data-q="What's due this week?">Due this week</button>
@@ -739,17 +691,17 @@ body {
   </section>
 
   <!-- CARD 5 · download -->
-  <section class="card search" aria-label="Download StudyBuddy">
+  <section class="card search" aria-label="Download Budly">
     <h2>Finds everything.<br>Misses nothing.</h2>
     <a class="bar-search" href="/downloads/studybuddy-latest.zip" download
-       title="SHA-256 {{SHA256}}" aria-label="Download the StudyBuddy self-host bundle, version {{VERSION}}">
+       title="SHA-256 {{SHA256}}" aria-label="Download Budly {{VERSION}}">
       <span class="mag">
         <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true">
           <circle cx="11" cy="11" r="7.1" fill="none" stroke="#121212" stroke-width="2.2"/>
           <path d="M16.3 16.3 21 21" stroke="#121212" stroke-width="2.2" stroke-linecap="round"/>
         </svg>
       </span>
-      <span class="q">Download StudyBuddy v{{VERSION}} · {{SIZE}}<span class="q-extra"> · free &amp; self-hosted</span></span>
+      <span class="q">Download Budly v1.0<span class="q-extra"> · free &amp; open source</span></span>
       <svg class="dl" width="16" height="20" viewBox="0 0 16 20" aria-hidden="true">
         <path d="M8 2v9.3" stroke="#141414" stroke-width="1.9" stroke-linecap="round"/>
         <path d="M4.4 8.1 8 11.7l3.6-3.6" fill="none" stroke="#141414" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
@@ -760,7 +712,7 @@ body {
 
 </main>
 
-<p class="sr-only">Built by Mir Sadat Bin Rakib · MIT License. Canvas is a trademark of Instructure, Inc. This project is independent and not affiliated with or endorsed by Instructure.</p>
+<p class="sr-only">Budly · Built by Mir Sadat Bin Rakib · MIT License. Canvas is a trademark of Instructure, Inc. This project is independent and not affiliated with or endorsed by Instructure.</p>
 
 <script>
 (function () {

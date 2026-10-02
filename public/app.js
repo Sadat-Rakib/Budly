@@ -1,15 +1,19 @@
 /*
- * StudyBuddy dashboard chat.
+ * Budly dashboard chat.
  *
- * Talks to the same FastAPI that serves the Telegram webhook and the cron tick:
- *   GET  /api/status          — auth gate + everything the dashboard renders
- *   POST /api/login           — password → HttpOnly session cookie
+ * The dashboard talks to the local Budly process (default http://127.0.0.1:8000):
+ *   GET  /api/status          — configuration state, sync info, workload counts
+ *   POST /api/canvas/test     — setup flow's "Test connection"
+ *   POST /api/sync            — manual "Refresh Canvas"
  *   POST /api/chat            — one question → grounded answer + source links
  *   GET  /api/digests/latest  — today's digest for the toast card
- *   POST /api/sync            — manual Canvas refresh
  *
- * No tokens, no analytics, no third-party calls. Everything the page shows comes
- * from those five endpoints.
+ * The same page also serves as the project showcase, where no Budly process is
+ * behind it. There the page runs in demo mode: clearly labelled, it answers
+ * with canned content and points people to the download. It never pretends to
+ * see a real Canvas account.
+ *
+ * No tokens, no analytics, no third-party calls.
  */
 (function () {
   'use strict';
@@ -19,9 +23,6 @@
   var askform = el('askform');
   var askinput = el('askinput');
   var asksend = el('asksend');
-  var authform = el('authform');
-  var authinput = el('authinput');
-  var authnote = el('authnote');
   var statusline = el('statusline');
   var botmount = el('postbot');
 
@@ -34,6 +35,7 @@
   botmount.appendChild(mascot.el);
 
   var busy = false;
+  var demoMode = false;
 
   // ------------------------------------------------------------------ helpers
 
@@ -96,77 +98,103 @@
     askform.classList.toggle('is-busy', value);
   }
 
-  function showAuth(note) {
-    authform.hidden = false;
-    authnote.textContent = note || '';
-    askform.hidden = true;
-    authinput.focus();
-  }
-
-  function showAsk() {
-    authform.hidden = true;
-    askform.hidden = false;
-    askinput.focus();
-  }
-
   // ------------------------------------------------------------------- boot
 
   function greet() {
     addMessage(
       'bot',
-      "Hey, I'm your StudyBuddy. I keep an eye on Canvas so you don't have to. " +
-        'Ask me about assignments, deadlines, announcements, or what changed today.'
+      "Hey, I'm Budly. Ask me anything about your Canvas — assignments, deadlines, " +
+        'announcements, or what changed today.'
     );
   }
 
   async function init() {
     try {
-      var response = await fetch('/api/status', { credentials: 'same-origin' });
-      if (response.status === 401) {
-        showAuth('Sign in with your dashboard password to start asking.');
-        return;
-      }
-      if (response.status === 503) {
-        showAuth('');
-        authnote.textContent =
-          'The dashboard is not enabled on this deployment yet. Set DASHBOARD_PASSWORD ' +
-          'and APP_SECRET, then reload.';
-        return;
-      }
-      if (!response.ok) {
-        addMessage('bot', "I couldn't reach the StudyBuddy server. Check your connection and reload.");
-        return;
-      }
+      var response = await fetch('/api/status');
+      if (!response.ok) throw new Error('not a Budly backend');
       var status = await response.json();
-      showAsk();
       renderStatus(status);
-      loadDigest(status);
+      loadDigest();
+      if (!status.canvas.configured && !status.canvas.mock) {
+        addMessage(
+          'bot',
+          'Budly is running, but Canvas is not connected yet.\n\nAdd your Canvas URL and ' +
+            'access token to .env, restart Budly, then hit "Refresh Canvas".'
+        );
+      }
+      return;
     } catch (error) {
-      addMessage('bot', "Can't reach the StudyBuddy server right now. Try again in a moment.");
+      enterDemoMode();
     }
   }
 
-  function renderStatus(status) {
-    var parts = [];
-    if (status.canvas && status.canvas.last_sync_error) {
-      parts.push('Canvas connection needs attention');
-      addMessage(
-        'bot',
-        "StudyBuddy lost access to Canvas.\n\nReconnect your Canvas account and I'll continue " +
-          'syncing your courses.'
-      );
+  // Demo mode: this page is the project showcase, not someone's Budly instance.
+  // Canned answers, clearly labelled, never implying access to a real Canvas.
+  var DEMO_ANSWERS = [
+    {
+      re: /due this week|due/i,
+      text:
+        "**Demo answer**\n\nIn the real app, Budly answers from your synced Canvas data:\n" +
+        '1. CSC 153 — Lab 5: Data Cleaning (due today, 11:59 pm)\n' +
+        '2. COMP 214 — Group Project Milestone 2 (due tomorrow, 10:00 pm)\n' +
+        '3. MATH 120 — Problem Set 6 (due Sunday)',
+      sources: [
+        { course: 'CSC 153', title: 'Lab 5: Data Cleaning', url: null },
+        { course: 'COMP 214', title: 'Group Project Milestone 2', url: null },
+      ],
+    },
+    {
+      re: /new|changed|update/i,
+      text:
+        '**Demo answer**\n\nBudly detects changes between syncs and can tell you:\n' +
+        '1. CSC 153 — new announcement: Module 6 released\n' +
+        '2. COMP 214 — deadline moved: Milestone 2 (now next Monday)',
+    },
+    {
+      re: /overdue/i,
+      text: '**Demo answer**\n\n1. CSC 153 — Lab 4: SQL Basics (was due last week)',
+    },
+  ];
+
+  function demoAnswer(text) {
+    var lowered = (text || '').toLowerCase();
+    for (var i = 0; i < DEMO_ANSWERS.length; i++) {
+      if (DEMO_ANSWERS[i].re.test(lowered)) return DEMO_ANSWERS[i];
     }
+    return {
+      text:
+        "This page is the project demo — it isn't connected to any Canvas account.\n\n" +
+        'Download Budly, connect your own Canvas, and ask for real.',
+    };
+  }
+
+  function enterDemoMode() {
+    demoMode = true;
+    var demo = document.createElement('span');
+    demo.className = 'demobadge';
+    demo.textContent = 'Demo';
+    demo.title = 'Project showcase: not connected to any Canvas account';
+    statusline.appendChild(demo);
+  }
+
+  function renderStatus(status) {
     var counts = status.counts || {};
     var dueToday = counts.due_today || 0;
     var overdue = counts.overdue || 0;
     var dueWeek = counts.due_week || 0;
-    parts.unshift(
-      dueWeek + ' due this week · ' + dueToday + ' today' + (overdue ? ' · ' + overdue + ' overdue' : '')
-    );
     var line = document.createElement('span');
-    line.textContent = parts.join(' — ');
+    line.textContent =
+      dueWeek + ' due this week · ' + dueToday + ' today' + (overdue ? ' · ' + overdue + ' overdue' : '');
     statusline.innerHTML = '';
     statusline.appendChild(line);
+
+    if (status.canvas && status.canvas.last_sync_error) {
+      addMessage(
+        'bot',
+        "Budly lost access to Canvas.\n\nReconnect your Canvas account and I'll continue " +
+          'syncing your courses.'
+      );
+    }
 
     // Mock mode is never silent: the badge travels with every status render.
     if (status.canvas && status.canvas.mock) {
@@ -202,9 +230,9 @@
     return hours === 1 ? '1 hour ago' : hours + ' hours ago';
   }
 
-  async function loadDigest(status) {
+  async function loadDigest() {
     try {
-      var response = await fetch('/api/digests/latest', { credentials: 'same-origin' });
+      var response = await fetch('/api/digests/latest');
       if (!response.ok) return;
       var digest = await response.json();
       var title = el('toast-title');
@@ -214,23 +242,16 @@
         title.textContent = 'Digest sent!';
         time.textContent = formatTime(new Date(digest.sent_at));
       }
-      var counts = (status && status.counts) || {};
-      var parts = [];
-      if (counts.due_week) parts.push(counts.due_week + ' due this week');
-      if (counts.overdue) parts.push(counts.overdue + ' overdue');
-      if (counts.announcements_week) parts.push(counts.announcements_week + ' new posts');
-      // Fall back to the digest's own first bullet when counts are flat.
-      if (!parts.length) {
-        var firstBullet = String(digest.body || '')
-          .split('\n')
-          .map(function (line) { return line.replace(/\*\*/g, '').trim(); })
-          .find(function (line) { return line.indexOf('- ') === 0; });
-        body.textContent = firstBullet
-          ? firstBullet.slice(2)
-          : "You're clear for now.";
-        return;
-      }
-      body.textContent = parts.join(' · ');
+      var firstBullet = String(digest.body || '')
+        .split('\n')
+        .map(function (line) {
+          return line
+            .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1') // [label](url) -> label
+            .replace(/\*\*/g, '')
+            .trim();
+        })
+        .find(function (line) { return line.indexOf('- ') === 0; });
+      body.textContent = firstBullet ? firstBullet.slice(2) : "You're clear for now.";
     } catch (error) {
       /* The toast keeps its decorative copy when the digest can't load. */
     }
@@ -244,16 +265,10 @@
   }
 
   async function manualSync() {
+    if (demoMode) return;
     react('blink');
     try {
-      var response = await fetch('/api/sync', {
-        method: 'POST',
-        credentials: 'same-origin',
-      });
-      if (response.status === 401) {
-        showAuth('Your session expired. Sign in again.');
-        return;
-      }
+      var response = await fetch('/api/sync', { method: 'POST' });
       var result = await response.json();
       if (!result.ok) {
         addMessage('bot', "The sync didn't go through: " + (result.error || 'unknown problem') + '.');
@@ -264,7 +279,7 @@
       addMessage('bot', 'Synced. ' + (result.summary || '').split('\n').slice(0, 2).join(', ') + '.');
       init();
     } catch (error) {
-      addMessage('bot', "Can't reach the StudyBuddy server right now.");
+      addMessage('bot', "Can't reach Budly right now.");
       react('dizzy', 900);
     }
   }
@@ -280,25 +295,30 @@
     var thinking = addMessage('bot', 'Checking Canvas…');
     thinking.classList.add('msg-thinking');
 
+    if (demoMode) {
+      thinking.remove();
+      var demo = demoAnswer(text);
+      addMessage('bot', renderMarkdown(demo.text), demo.sources);
+      react('delighted', 900);
+      setBusy(false);
+      askinput.focus();
+      return;
+    }
+
     try {
       var response = await fetch('/api/chat', {
         method: 'POST',
-        credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: text }),
       });
       thinking.remove();
 
-      if (response.status === 401) {
-        showAuth('Your session expired. Sign in again.');
-        return;
-      }
       if (!response.ok) {
         var detail = '';
         try {
           detail = (await response.json()).detail || '';
         } catch (error) { /* non-JSON error body */ }
-        addMessage('bot', detail || "Something went wrong on the server. Try again in a moment.");
+        addMessage('bot', detail || 'Something went wrong on the server. Try again in a moment.');
         react('dizzy', 900);
         return;
       }
@@ -309,7 +329,7 @@
       thinking.remove();
       addMessage(
         'bot',
-        "Can't reach the StudyBuddy server right now. Check your connection and try again."
+        "Can't reach Budly right now. Check your connection and try again."
       );
       react('dizzy', 900);
     } finally {
@@ -340,29 +360,6 @@
       askinput.value = chip.getAttribute('data-q') || chip.textContent;
       send(askinput.value);
     });
-  });
-  authform.addEventListener('submit', async function (event) {
-    event.preventDefault();
-    authnote.textContent = '';
-    try {
-      var response = await fetch('/api/login', {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: authinput.value }),
-      });
-      if (response.ok) {
-        authinput.value = '';
-        chatlog.innerHTML = '';
-        greet();
-        init();
-        return;
-      }
-      var body = await response.json().catch(function () { return {}; });
-      authnote.textContent = body.detail || "That didn't work. Try again.";
-    } catch (error) {
-      authnote.textContent = "Can't reach the StudyBuddy server right now.";
-    }
   });
 
   greet();

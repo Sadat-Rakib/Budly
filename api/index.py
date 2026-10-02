@@ -1,4 +1,11 @@
-"""Vercel entrypoint: Telegram webhook + cron tick."""
+"""Legacy Vercel entrypoint: Telegram webhook + cron tick.
+
+Budly v1.0 is local-first: the dashboard and scheduler run on the user's machine
+(`budly start`). This function only serves the optional hosted Telegram webhook
+and the legacy cron tick for deployments that still use them, plus the static
+showcase page. The dashboard API deliberately does NOT run here -- a public
+endpoint has no business serving someone's Canvas data.
+"""
 
 from __future__ import annotations
 
@@ -19,9 +26,9 @@ from telegram import Update  # noqa: E402
 from canvasbuddy import bot  # noqa: E402
 from canvasbuddy.config import get_settings  # noqa: E402
 from canvasbuddy.notify.service import run_tick  # noqa: E402
-from canvasbuddy.web.api import router as web_router  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
 async def _dispose_tg() -> None:
@@ -50,7 +57,6 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
-app.include_router(web_router)
 
 _tg = None
 _lock = asyncio.Lock()

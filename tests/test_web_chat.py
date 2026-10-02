@@ -41,7 +41,7 @@ def make_settings(**overrides: object) -> Settings:
 
 
 def course(**overrides: object) -> Course:
-    c = Course(canvas_id=1, code="AUSTA 153H3", short_code="AUSTA 153", name="Data Analysis")
+    c = Course(canvas_id=1, code="CSC 153H3", short_code="CSC 153", name="Data Analysis")
     c.id = 1
     for key, value in overrides.items():
         setattr(c, key, value)
@@ -49,7 +49,7 @@ def course(**overrides: object) -> Course:
 
 
 def due_row(
-    course_code: str = "AUSTA 153",
+    course_code: str = "CSC 153",
     title: str = "Quiz 5",
     due_at: str | None = "2026-10-02T23:59:00-06:00",
     url: str | None = "https://canvas.example.edu/courses/1/assignments/9",
@@ -108,13 +108,13 @@ def patch_courses(monkeypatch: pytest.MonkeyPatch, *courses: Course) -> None:
 
 class TestMatchCourseMentions:
     def test_short_code_prefix(self) -> None:
-        got = match_course_mentions("what's due for AUSTA?", [course()])
+        got = match_course_mentions("what's due for CSC?", [course()])
         assert len(got) == 1
-        assert got[0][1] == "austa"
+        assert got[0][1] == "csc"
 
     def test_full_code_substring(self) -> None:
-        got = match_course_mentions("AUSTA 153 quiz?", [course()])
-        assert got[0][1] == "austa 153"
+        got = match_course_mentions("CSC 153 quiz?", [course()])
+        assert got[0][1] == "csc 153"
 
     def test_nickname(self) -> None:
         c = course(nickname="my data class")
@@ -126,18 +126,18 @@ class TestMatchCourseMentions:
 
     def test_two_courses_matching_prefix_is_ambiguous(self) -> None:
         a = course()
-        b = Course(canvas_id=2, code="AUSTA 268H3", short_code="AUSTA 268", name="Stats")
+        b = Course(canvas_id=2, code="CSC 268H3", short_code="CSC 268", name="Stats")
         b.id = 2
-        got = match_course_mentions("what's due for AUSTA?", [a, b])
-        assert {c.short_code for c, _ in got} == {"AUSTA 153", "AUSTA 268"}
+        got = match_course_mentions("what's due for CSC?", [a, b])
+        assert {c.short_code for c, _ in got} == {"CSC 153", "CSC 268"}
 
     def test_specific_code_wins_over_shared_prefix(self) -> None:
         a = course()
-        b = Course(canvas_id=2, code="AUSTA 268H3", short_code="AUSTA 268", name="Stats")
+        b = Course(canvas_id=2, code="CSC 268H3", short_code="CSC 268", name="Stats")
         b.id = 2
-        got = match_course_mentions("what's due for AUSTA 268?", [a, b])
+        got = match_course_mentions("what's due for CSC 268?", [a, b])
         assert len(got) == 1
-        assert got[0][0].short_code == "AUSTA 268"
+        assert got[0][0].short_code == "CSC 268"
 
     def test_the_does_not_match_theatre(self) -> None:
         thea = Course(canvas_id=3, code="THEA 101H3", short_code="THEA 101", name="Theatre")
@@ -188,7 +188,7 @@ class TestDeterministicAnswers:
         answer = await answer_message(FakeSession(), make_settings(), None, "What's due this week?")
 
         assert answer.kind == "due"
-        assert "AUSTA 153" in answer.text
+        assert "CSC 153" in answer.text
         assert "Quiz 5" in answer.text
         assert answer.sources[0].url == "https://canvas.example.edu/courses/1/assignments/9"
         assert calls["list_upcoming"][0]["days"] == 31
@@ -250,7 +250,7 @@ class TestDeterministicAnswers:
                     {
                         "type": "new_announcement",
                         "what": "Module 5 posted",
-                        "course": "AUSTA 153",
+                        "course": "CSC 153",
                         "when": "2026-10-01T09:00:00-06:00",
                         "url": "https://canvas.example.edu/courses/1/discussions/5",
                     },
@@ -301,7 +301,7 @@ class TestDeterministicAnswers:
         )
 
         assert answer.kind == "next"
-        assert answer.text.startswith("Next up: AUSTA 153 — Quiz 5")
+        assert answer.text.startswith("Next up: CSC 153 — Quiz 5")
 
     async def test_course_scoped_due_question(self, monkeypatch) -> None:
         patch_courses(monkeypatch, course())
@@ -310,10 +310,10 @@ class TestDeterministicAnswers:
             list_upcoming={"due": [due_row()], "no_due_date_set": []},
         )
 
-        answer = await answer_message(FakeSession(), make_settings(), None, "What's due for AUSTA?")
+        answer = await answer_message(FakeSession(), make_settings(), None, "What's due for CSC?")
 
         assert answer.kind == "due"
-        assert "AUSTA 153" in answer.text
+        assert "CSC 153" in answer.text
         assert "Quiz 5" in answer.text
 
     async def test_show_everything_for_a_course(self, monkeypatch) -> None:
@@ -329,7 +329,7 @@ class TestDeterministicAnswers:
         )
 
         answer = await answer_message(
-            FakeSession(), make_settings(), None, "Show me everything for AUSTA"
+            FakeSession(), make_settings(), None, "Show me everything for CSC"
         )
 
         assert answer.kind == "course"

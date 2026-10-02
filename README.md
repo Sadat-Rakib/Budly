@@ -1,173 +1,196 @@
-# StudyBuddy
+# Budly
 
-Canvas has everything you need for school.
+Budly keeps an eye on Canvas for you.
 
-The problem is that the information is spread across courses, assignments, announcements, modules and deadlines.
+Canvas information is spread across courses, assignments, announcements, modules and deadlines. It is easy to miss one small update even when you check Canvas regularly.
 
-Sometimes you check Canvas and still miss something.
+Budly runs on your own computer and connects to your Canvas account.
 
-StudyBuddy was made to fix that. Connect your Canvas account once and StudyBuddy keeps track of what is happening for you.
-
-Ask things like:
+You can ask things like:
 
 - What's due this week?
-- Did anything change today?
-- What is my next assignment?
+- What changed today?
+- Do I have anything overdue?
 - Any new announcements?
-- What's due for AUSTA?
+- What's my next assignment?
 
-StudyBuddy also prepares a morning and evening update so you can quickly see what needs your attention.
+Budly can also prepare morning and evening updates and send them to Telegram or Slack.
 
-On the web it looks like this: a small blue robot called Postbot sits on your dashboard, watches your cursor, and answers questions about your courses. Around it live the rest of the picture: your latest digest, the sync status, and the notification channels you use.
+A small blue robot called Postbot lives on the dashboard. It follows your cursor and answers questions about your courses.
 
-## Why I built it
+## Quick start
 
-I got tired of opening Canvas, checking every course, going through announcements, assignments and modules, then still worrying that I missed something.
+### 1. Download Budly
 
-Missing one small update can mean missing a deadline or losing marks.
-
-StudyBuddy gives that information one place to live.
-
-## How it works
-
-1. Connect StudyBuddy to Canvas with a read-only access token.
-2. StudyBuddy reads your courses and upcoming work, and keeps that information updated.
-3. Ask the mascot questions in normal language. Common questions (due dates, overdue work, new announcements, changes) are answered straight from your synced data, so they are fast and cannot be invented.
-4. For anything else, StudyBuddy passes only the relevant course facts to an AI model and asks it to phrase the answer.
-5. Get a morning and evening summary of what matters, on the dashboard and in Telegram or Slack if you use them.
-
-Every answer links back to the source item in Canvas.
-
-## What it can do
-
-- Connect to Canvas LMS (read-only)
-- Track courses for a term
-- Find upcoming assignments, including ones with no due date set
-- Surface new announcements
-- Detect important changes: new and removed assignments, moved deadlines
-- Answer Canvas questions in the dashboard chat
-- Show source links back to Canvas
-- Send morning summaries, evening reminders and a Saturday review
-- Work with a replaceable AI provider (works without one for the common questions)
-- Run online, without your laptop
-- Self-host from GitHub
-
-## Your data
-
-StudyBuddy is open source and self-hostable. It runs in accounts you control.
-
-Your Canvas credentials live only in your StudyBuddy deployment, never in the browser and never in the repository. The dashboard chat is protected by a password you set, and the Canvas token is only ever read on the server.
-
-StudyBuddy requests the Canvas information it needs: courses, assignments, announcements. Nothing is submitted back to Canvas.
-
-If you configure an AI provider, StudyBuddy sends that provider only the small set of course facts needed to answer your question (course codes, titles, due dates). You can leave the AI provider unconfigured: the common questions still work, answered directly from your data.
-
-## Running it
-
-You need Python 3.12 or newer and [uv](https://docs.astral.sh/uv/). On Windows, macOS or Linux:
+Download Budly v1.0 from the releases page, or clone the repository:
 
 ```bash
 git clone https://github.com/Sadat-Rakib/StudyBuddy
 cd StudyBuddy
+```
+
+### 2. Install Python and uv
+
+Budly needs Python 3.12 or newer and [uv](https://docs.astral.sh/uv/). On Windows:
+
+```powershell
+winget install Python.Python.3.12
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+Or run the bundled setup script, which checks these for you:
+
+```bash
+setup.bat      # Windows
+./setup.sh     # macOS / Linux
+```
+
+### 3. Install Budly
+
+```bash
 uv sync
-cp .env.example .env
 ```
 
-Then fill in `.env`. Four values matter:
+### 4. Create your configuration
 
-| Variable | What it is | Where to get it |
-| --- | --- | --- |
-| `CANVAS_BASE_URL` | Your school's Canvas address | The same address you use in the browser, e.g. `https://canvas.ualberta.ca` |
-| `CANVAS_TOKEN` | A Canvas personal access token | Canvas → Account → Settings → New Access Token. Read-only scope is enough |
-| `DATABASE_URL` | A Postgres database | Supabase free tier works. Use the session pooler connection string |
-| `USER_TIMEZONE` | Your IANA timezone | e.g. `America/Edmonton`, `America/Toronto`, `Asia/Dhaka` |
+Copy `.env.example` to `.env` and fill in the values you want. Only the Canvas section is required.
 
-Optional but useful:
+### 5. Connect Canvas
 
-| Variable | What it is |
+In `.env`:
+
+```bash
+CANVAS_BASE_URL=https://canvas.ualberta.ca
+CANVAS_TOKEN=your-token-here
+```
+
+Your Canvas base URL is the same address you use in the browser. Your personal access token comes from Canvas: Account, Settings, Approved Integrations, New Access Token. It is not your Canvas password, and it should stay private, just like a password. Some institutions restrict token creation; if you cannot create one, ask your institution's IT help desk.
+
+Check the connection:
+
+```bash
+uv run budly test-canvas
+```
+
+Success prints "Canvas connected successfully". On failure Budly prints one plain sentence about what to check, and never prints the token.
+
+### 6. Add an AI provider (optional)
+
+Budly answers due-date and change questions from your synced data with no AI at all. For free-form questions, configure OpenRouter (one account, many models, free models available):
+
+```bash
+OPENROUTER_API_KEY=your-key
+CHAT_MODEL=anthropic/claude-sonnet-5
+AI_FALLBACK_MODEL_1=google/gemini-2.5-flash
+AI_FALLBACK_MODEL_2=openai/gpt-4o-mini
+```
+
+How fallback works: Budly tries the primary model; if the provider rate-limits, times out, has an outage, or the model is unavailable, it tries fallback 1, then fallback 2, and finally answers from structured data. A rejected API key stops immediately instead of wasting the fallbacks. The primary model is never skipped when it works.
+
+### 7. Optional: Telegram or Slack
+
+Notifications are optional. Budly is useful with none, one, or both.
+
+**Telegram:** create a bot with [@BotFather](https://t.me/BotFather) (`/newbot`, copy the token), send any message to your new bot, then put both values in `.env`:
+
+```bash
+TELEGRAM_BOT_TOKEN=123456:ABC...
+TELEGRAM_CHAT_ID=your-chat-id
+```
+
+Not sure of your chat ID? `uv run budly doctor` prints it after you have messaged the bot once.
+
+**Slack:** create a Slack app, enable Incoming Webhooks, pick a channel, copy the webhook URL:
+
+```bash
+SLACK_WEBHOOK_URL=https://hooks.slack.com/services/...
+```
+
+Test either channel:
+
+```bash
+uv run budly test-telegram   # sends: Budly is connected (a graduation cap)
+uv run budly test-slack
+```
+
+### 8. Start Budly
+
+```bash
+uv run budly start
+```
+
+Then open http://127.0.0.1:8000. The dashboard loads immediately; the first Canvas sync runs in the background and fills it in.
+
+The scheduler runs inside Budly. Morning updates go out at 07:00 (your timezone, configurable), evening updates at 20:00, plus a Saturday review. Budly checks Canvas for changes every 30 minutes (`CANVAS_SYNC_INTERVAL_MINUTES=30` in `.env` to change it).
+
+## Running locally means this
+
+Budly runs on your computer. Scheduled notifications are sent while Budly is running and your computer is awake.
+
+If Budly starts after a scheduled update was missed, it generates a catch-up update, within a bounded window. A morning digest from 07:00 is caught up if Budly starts by early afternoon; yesterday's news is never resurrected at midnight.
+
+Restarting Budly never duplicates a notification: every digest is recorded once per day per channel, and a restart re-checks that record before sending.
+
+## Mock mode (for development)
+
+Set `CANVAS_MOCK_MODE=true` and Budly swaps Canvas for three built-in demo courses (CSC 153, COMP 214, MATH 120) with work due today, tomorrow and later, an overdue item, a completed item, and announcements. Sync once to bootstrap, sync again and the demo term moves on so change detection has something to detect. The dashboard shows a clear Demo data badge, and Budly logs a warning on every start. Never enable it in any deployment that also serves real use.
+
+## Privacy
+
+Budly is open source and runs on your computer.
+
+Your Canvas access token and integration credentials are stored in your local configuration and are not committed to the repository.
+
+Budly connects directly to Canvas to retrieve your course information. Budly binds to localhost by default; nothing it serves is reachable from other machines unless you deliberately change that, and then securing it is your responsibility.
+
+If you configure an external AI provider, the minimum relevant Canvas context needed to answer a question may be sent to that provider. Canvas credentials are never sent to the AI provider, and simple questions are answered locally without any AI call at all.
+
+If you enable Telegram or Slack, notification content is sent to the service you configured.
+
+## Troubleshooting
+
+| Symptom | Fix |
 | --- | --- |
-| `DASHBOARD_PASSWORD` | Unlocks the web dashboard chat. Leave empty and the dashboard stays locked |
-| `APP_SECRET` | Random string that signs dashboard sessions. Falls back to `CRON_SECRET` |
-| `OPENROUTER_API_KEY` | AI provider for the questions that need one. [openrouter.ai](https://openrouter.ai), free models available |
-| `TELEGRAM_BOT_TOKEN` + `TELEGRAM_CHAT_ID` | Delivers digests to Telegram |
-| `SLACK_WEBHOOK_URL` | Delivers digests to Slack |
-| `DIGEST_SLOT` / `NUDGE_SLOT` / `REVIEW_SLOT` / `CHECKIN_SLOT` | When each message goes out, e.g. `daily@07:00`. Empty string disables a slot |
+| Canvas connection rejected | Re-check `CANVAS_BASE_URL` (no `/api/v1` needed) and create a fresh token. Password changes on Canvas revoke tokens. |
+| "AI" answers unavailable | Set `OPENROUTER_API_KEY`. Due-date and change questions work without it. |
+| Telegram message not arriving | Message the bot once (tap Start), then check `TELEGRAM_CHAT_ID`. `uv run budly doctor` shows the detected ID. |
+| Slack webhook rejected | Recreate the incoming webhook; the URL must start with `https://hooks.slack.com/services/`. |
+| Port already in use | Start on another port: `uv run budly start --port 8080`. |
+| Scheduler not sending | Budly must be running at the scheduled time (or started within the catch-up window). Check the scheduler dot on the dashboard status line. |
+| Computer was asleep during the scheduled time | Budly generates a catch-up update on start if the slot is still within its window. |
+| Demo assignments appeared | `CANVAS_MOCK_MODE=true` is set in your `.env`. Remove it and restart. |
 
-Once `.env` is filled in:
-
-```bash
-uv run alembic upgrade head    # create the tables
-uv run canvasbuddy sync        # first Canvas sync
-uv run canvasbuddy             # list every command
-```
-
-### Running the dashboard locally
-
-```bash
-uv run uvicorn api.index:app --reload
-```
-
-Then open http://127.0.0.1:8000, sign in with `DASHBOARD_PASSWORD`, and ask Postbot something.
-
-### Developing without a Canvas account
-
-Set `CANVAS_MOCK_MODE=true` and StudyBuddy swaps Canvas for a built-in fixture world: three courses with work due today, tomorrow and later, an overdue item, a completed and graded item, undated graded work, and recent announcements. Sync once to bootstrap, sync again and the fixture term moves on (a deadline moves, new work and an announcement appear) so change detection, digests and "what's new?" all have something true to answer. The dashboard shows a Demo data badge, sync results carry `mock: true`, and the client logs a warning on every start, so it can never pass silently. Never enable it in production.
-
-### Deploying it online
-
-The hosted version runs entirely on free tiers and does not need your laptop:
-
-1. **Vercel** hosts everything: the dashboard page, the API and the Telegram webhook. `vercel` CLI → import the repo → add the variables from `.env` in the project settings → deploy.
-2. **Supabase** is the Postgres database.
-3. **A cron ping** wakes the scheduler. Create a free cron-job.org job that GETs `https://your-deployment.vercel.app/api/cron` every 15 minutes with the header `Authorization: Bearer <your CRON_SECRET>`. At each tick StudyBuddy decides for itself whether a digest is due in the user's timezone, and syncs at most once an hour between digests.
-
-No local process, database or cron is needed for the hosted version.
-
-## Architecture
+## Project structure
 
 ```
-             ┌─────────────┐
-             │   Canvas    │
-             └──────┬──────┘
-                    │ read-only
-                    ▼
-             ┌─────────────┐
-             │ StudyBuddy  │  Vercel serverless (FastAPI)
-             │   Backend   │  ├─ web dashboard API
-             │             │  ├─ Telegram webhook
-             └───┬─────┬───┘  └─ cron tick
-                 │     │
-          ┌──────┘     └──────┐
-          ▼                   ▼
-      Postgres              AI provider
-      (Supabase)            (OpenRouter, optional)
-          │
-          ▼
-    StudyBuddy dashboard + Telegram / Slack
+src/canvasbuddy/          the application
+  canvas/                 Canvas API client, payload schemas, fixture mock
+  sync/                   sync worker + change detection
+  digest/                 digest assembly and rendering
+  notify/                 delivery to Telegram, Slack and the in-app card
+  agent/                  the chat's tools, memory and model loop
+  llm/                    the AI provider client (OpenRouter-compatible)
+  web/                    dashboard API + chat engine
+  scheduler.py            the local in-process scheduler
+  server.py               the local server (what `budly start` runs)
+api/index.py              legacy hosted webhook (optional, not needed locally)
+public/                   the Bento dashboard page
+migrations/               Postgres migrations (SQLite creates its store itself)
+tests/                    the test suite
 ```
+## Contributing
 
-The database keeps a small, normalized copy of your Canvas work: courses, assignments, announcements, exams, change events, digests and chat history. Change detection runs during every sync, so "what changed today?" is a lookup, not a guess.
-
-## Tests
-
-```bash
-uv run pytest
-```
-
-The suite covers the Canvas sync and change detection, the digest builders, the chat engine's grounding (including a test that asks about work that does not exist and expects an honest "couldn't find it"), the dashboard auth, and the API surface.
-
-## Bot commands
-
-If you use the Telegram bot: `/today /week /grades /exams /digest /extract /sync /add /ics /mute /unmute /testnotify /help`
+1. Fork and clone the repository.
+2. `uv sync`
+3. Set `CANVAS_MOCK_MODE=true` in `.env` so you never need real Canvas credentials.
+4. `uv run pytest` should pass before and after your change.
+5. `uv run ruff check .` must be clean.
+6. Open a pull request.
 
 ## Costs
 
-Vercel Hobby $0, Supabase free $0, cron-job.org free $0, Slack webhook $0. OpenRouter has free models; leave it out and the dashboard still answers the common questions.
-
-## Acknowledgements
-
-Postbot comes from the [page-mascot](https://github.com/nilbuild/page-mascot) character set by Kamran Ahmed (MIT).
+Everything local is free. An OpenRouter account has free models; leave AI unconfigured and the deterministic answers still work. Telegram and Slack webhooks are free.
 
 ## Licence
 
-MIT — see `LICENSE`. Canvas is a trademark of Instructure, Inc. This project is independent and not affiliated with or endorsed by Instructure.
+MIT - see `LICENSE`. Canvas is a trademark of Instructure, Inc. Budly is independent and not affiliated with or endorsed by Instructure. Postbot comes from the page-mascot character set (MIT, Kamran Ahmed).

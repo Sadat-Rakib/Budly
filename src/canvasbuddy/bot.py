@@ -114,7 +114,7 @@ async def _reply(update: Update, text: str, *, markdown: bool = False) -> None:
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await _reply(
         update,
-        "StudyBuddy — your Canvas courses in Telegram and Slack.\n"
+        "Budly — your Canvas, watched.\n"
         "Morning digest, evening nudge (only when due), Saturday review + check-in.\n\n"
         "Ask me anything about your courses — what's due, what a prof posted, how loaded "
         "next week looks.\n\n"
@@ -757,6 +757,7 @@ def build_application(settings: Settings | None = None) -> Application:
 
 def run() -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    logging.getLogger("httpx").setLevel(logging.WARNING)
     app = build_application()
     # drop_pending_updates: on a redeploy the bot must not replay a backlog of questions
     # against data that has since moved on.
