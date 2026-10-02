@@ -25,7 +25,7 @@ A small blue robot called Postbot lives on the dashboard. It follows your cursor
 Download Budly v1.0 from the releases page, or clone the repository:
 
 ```bash
-git clone https://github.com/Sadat-Rakib/StudyBuddy
+git clone https://github.com/Sadat-Rakib/Budly
 cd StudyBuddy
 ```
 

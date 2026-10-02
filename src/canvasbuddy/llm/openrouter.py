@@ -230,7 +230,7 @@ class OpenRouterClient:
         if endpoint.provider == "openrouter":
             # Optional -- they only affect how this app appears in OpenRouter's own
             # activity log, which is worth having when debugging a bad turn.
-            headers["HTTP-Referer"] = "https://github.com/Sadat-Rakib/StudyBuddy"
+            headers["HTTP-Referer"] = "https://github.com/Sadat-Rakib/Budly"
             headers["X-Title"] = "Budly"
 
         body: dict[str, Any] = {
