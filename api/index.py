@@ -20,7 +20,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from fastapi import FastAPI, Header, HTTPException, Request  # noqa: E402
-from fastapi.staticfiles import StaticFiles  # noqa: E402
 from telegram import Update  # noqa: E402
 
 from canvasbuddy import bot  # noqa: E402
@@ -118,10 +117,7 @@ async def cron(
     return await run_tick(get_settings(), await get_tg(), dry_run=dry_run, now_override=now)
 
 
-# The landing page + downloads live in public/ and are served statically by Vercel in
-# production, so this mount only matters for local runs and previews -- it never sees
-# /api/* (registered above) and static files win before the function on Vercel.
-_PUBLIC_DIR = Path(__file__).resolve().parent.parent / "public"
-app.mount(
-    "/", StaticFiles(directory=_PUBLIC_DIR, html=True, check_dir=False), name="public"
-)
+# Static files (the showcase page, downloads) are served by Vercel's own static
+# layer from public/ -- they win before the function. The function therefore mounts
+# no static directory: anything unmatched is a plain 404, and the function bundle
+# does not need the page at all.
