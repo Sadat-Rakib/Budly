@@ -1,5 +1,5 @@
 /*
- * Postbot — the StudyBuddy mascot.
+ * Postbot — the Budly mascot.
  *
  * A vanilla-JS port of page-mascot (https://github.com/nilbuild/page-mascot,
  * MIT © Kamran Ahmed). Same mechanics: two 3×3 sprite sheets, the pointer's
