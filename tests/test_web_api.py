@@ -1,10 +1,11 @@
-"""The dashboard HTTP surface: auth gate, status, chat, digests.
+"""The dashboard HTTP surface: status, chat, digests.
 
 The endpoints are exercised through httpx's ASGI transport against the real router.
 The database is faked one level below the handlers: a FakeSession serves unsaved ORM
 rows keyed by the statement's entity, and the heavy tool calls are patched the same
 way test_web_chat patches them. What gets tested here is the HTTP behaviour -- status
-codes, cookies, auth gating, and response shapes -- not the query logic underneath.
+codes, response shapes, and the absence of an auth gate -- not the query logic
+underneath.
 """
 
 from __future__ import annotations
@@ -26,8 +27,6 @@ def make_settings(**overrides: object) -> Settings:
         "canvas_base_url": "https://canvas.example.edu",
         "canvas_token": "t",
         "database_url": "postgresql://u:p@localhost/db",
-        "dashboard_password": "sesame",
-        "app_secret": "secret",
         "user_timezone": "America/Edmonton",
     }
     defaults.update(overrides)

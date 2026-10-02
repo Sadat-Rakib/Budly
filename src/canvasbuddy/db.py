@@ -40,9 +40,33 @@ def get_sessionmaker() -> async_sessionmaker[AsyncSession]:
     return async_sessionmaker(get_engine(), expire_on_commit=False)
 
 
+_store_ready: set[str] = set()
+
+
+async def ensure_local_store() -> None:
+    """Create the tables on a local SQLite store. Postgres uses migrations instead.
+
+    Called on every session rather than only at server startup so that CLI commands
+    (``budly sync``, ``budly digest``, ``budly doctor``) work against a store that has
+    never been opened by ``budly start``.
+    """
+    engine = get_engine()
+    if engine.dialect.name != "sqlite":
+        return
+    key = str(engine.url)
+    if key in _store_ready:
+        return
+    from canvasbuddy.models import Base
+
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    _store_ready.add(key)
+
+
 @asynccontextmanager
 async def session_scope() -> AsyncIterator[AsyncSession]:
     """Transactional scope: commit on success, roll back on any exception."""
+    await ensure_local_store()
     async with get_sessionmaker()() as session:
         try:
             yield session

@@ -22,27 +22,44 @@ down_revision: str | None = "b94ea274cdcd"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
+
 def _is_postgres() -> bool:
     return op.get_bind().dialect.name == "postgresql"
 
 
-def _to_json(table: str, column: str) -> None:
+def _array_to_json(table: str, column: str) -> None:
+    """text[] -> json.
+
+    A text[] renders as ``{a,b}``, which is not valid JSON, so the cast has to go
+    through ``to_json`` rather than the ``::text::json`` shorthand.
+    """
     if not _is_postgres():
         return
     op.alter_column(
         table,
         column,
         type_=sa.JSON(),
-        postgresql_using=f"{column}::text::json",
+        postgresql_using=f"to_json({column})",
+    )
+
+
+def _jsonb_to_json(table: str, column: str) -> None:
+    if not _is_postgres():
+        return
+    op.alter_column(
+        table,
+        column,
+        type_=sa.JSON(),
+        postgresql_using=f'"{column}"::json',
     )
 
 
 def upgrade() -> None:
-    _to_json("courses", "enrolled_sections")
-    _to_json("assignments", "submission_types")
-    _to_json("events", "payload")
-    _to_json("chat_messages", "tool_calls")
-    _to_json("digests", "items")
+    _array_to_json("courses", "enrolled_sections")
+    _array_to_json("assignments", "submission_types")
+    _jsonb_to_json("events", "payload")
+    _jsonb_to_json("chat_messages", "tool_calls")
+    _jsonb_to_json("digests", "items")
 
 
 def downgrade() -> None:
@@ -50,20 +67,38 @@ def downgrade() -> None:
         return
     from sqlalchemy.dialects.postgresql import JSONB
 
-    op.alter_column(
-        "courses",
-        "enrolled_sections",
-        type_=sa.ARRAY(sa.Text()),
-        postgresql_using="enrolled_sections::text[]",
+    # Postgres refuses a subquery in a transform expression ("cannot use subquery in
+    # transform expression"), and json_array_elements_text is set-returning, so the
+    # array conversion needs a real function rather than an inline expression.
+    op.execute(
+        """
+        CREATE OR REPLACE FUNCTION _budly_json_to_text_array(j json) RETURNS text[]
+        LANGUAGE plpgsql IMMUTABLE AS $fn$
+        DECLARE out text[];
+        BEGIN
+          IF j IS NULL THEN RETURN NULL; END IF;
+          SELECT array_agg(value) INTO out FROM json_array_elements_text(j) AS t(value);
+          RETURN out;
+        END
+        $fn$
+        """
     )
-    op.alter_column(
-        "assignments",
-        "submission_types",
-        type_=sa.ARRAY(sa.Text()),
-        postgresql_using="submission_types::text[]",
-    )
-    op.alter_column("events", "payload", type_=JSONB(), postgresql_using="payload::jsonb")
-    op.alter_column(
-        "chat_messages", "tool_calls", type_=JSONB(), postgresql_using="tool_calls::jsonb"
-    )
-    op.alter_column("digests", "items", type_=JSONB(), postgresql_using="items::jsonb")
+    try:
+        for table, column in (
+            ("courses", "enrolled_sections"),
+            ("assignments", "submission_types"),
+        ):
+            op.alter_column(
+                table,
+                column,
+                type_=sa.ARRAY(sa.Text()),
+                postgresql_using=f"_budly_json_to_text_array({column})",
+            )
+        for table, column in (
+            ("events", "payload"),
+            ("chat_messages", "tool_calls"),
+            ("digests", "items"),
+        ):
+            op.alter_column(table, column, type_=JSONB(), postgresql_using=f'"{column}"::jsonb')
+    finally:
+        op.execute("DROP FUNCTION IF EXISTS _budly_json_to_text_array(json)")

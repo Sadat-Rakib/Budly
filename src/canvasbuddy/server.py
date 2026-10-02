@@ -49,14 +49,9 @@ async def _lifespan(app: FastAPI):
 
 async def _ensure_local_store() -> None:
     """Create tables on the local SQLite store; Postgres keeps using migrations."""
-    from canvasbuddy.db import get_engine
-    from canvasbuddy.models import Base
+    from canvasbuddy.db import ensure_local_store
 
-    engine = get_engine()
-    if engine.dialect.name != "sqlite":
-        return
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    await ensure_local_store()
 
 
 async def _initial_sync() -> None:

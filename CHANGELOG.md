@@ -49,6 +49,15 @@ notification scheduler in-process. No Supabase account, no cron service, no logi
 
 ### Fixed
 
+- A Postgres store created by an earlier version could not be written to: the v1
+  models store JSON in every dialect, but the existing tables declared `text[]` and
+  `jsonb`, so every sync failed with a datatype mismatch. The cross-dialect
+  migration now converts those columns correctly (`to_json` for arrays, `::json` for
+  jsonb) and its downgrade round-trips; a test fails if a JSON column ever appears in
+  the models without a matching migration.
+- `budly sync`, `budly digest` and the other commands against a brand-new SQLite
+  file used to fail with "no such table": the local store now creates its schema on
+  first use, not only when the dashboard starts.
 - httpx request logging could print the Telegram bot token in URLs; those logs are
   now silenced.
 - Announcement change events no longer duplicate the same announcement twice in
