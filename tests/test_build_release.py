@@ -78,3 +78,21 @@ def test_no_third_party_loads_in_landing():
     )
     hits = loads.findall(html)
     assert not hits, f"landing page loads third-party resources: {hits[:3]}"
+
+
+def test_collect_excludes_previous_zips_and_the_stale_page():
+    """The bundle must not carry a copy of the last release inside it, and must not
+    ship the stale checked-in ``public/index.html``: the build appends the freshly
+    filled page at that same path, and two entries under one name means the first
+    one is dead weight that whichever extractor reads last silently overwrites."""
+    files = br.collect()
+    root = Path(__file__).resolve().parent.parent
+
+    assert not [f for f in files if "downloads" in f.relative_to(root).parts]
+    assert root / "public" / "index.html" not in files
+    assert not [f for f in files if f.suffix == ".zip"]
+
+    # The dashboard assets stay, so a self-hosted deployment renders out of the box.
+    assert root / "public" / "app.js" in files
+    assert root / "public" / "mascot.js" in files
+    assert any("public/mascots" in f.as_posix() for f in files)

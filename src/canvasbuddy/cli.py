@@ -18,7 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from canvasbuddy.canvas.client import CanvasClient, TokenRevokedError, open_canvas_client
+from canvasbuddy.canvas.client import TokenRevokedError, open_canvas_client
 from canvasbuddy.config import Settings, get_settings
 from canvasbuddy.db import session_scope
 from canvasbuddy.digest.builder import DigestContent, build_digest, render_digest
@@ -87,10 +87,19 @@ async def doctor() -> None:
 
     ok = True
 
-    async with CanvasClient(settings) as client:
+    # ``open_canvas_client`` rather than CanvasClient directly, so ``doctor`` checks the
+    # same client the sync path uses. With CANVAS_MOCK_MODE set that is the fixture
+    # client, and reporting a 401 against a live Canvas the deployment never talks to
+    # would be a false alarm.
+    async with open_canvas_client(settings) as client:
         try:
             me = await client.get_self()
-            typer.secho(f"[ok]   Canvas token — {me.get('name')} (id {me.get('id')})", fg="green")
+            where = " (demo data, not a live token)" if settings.canvas_mock_mode else ""
+            typer.secho(
+                f"[ok]   Canvas{' (mock)' if settings.canvas_mock_mode else ' token'} — "
+                f"{me.get('name')} (id {me.get('id')}){where}",
+                fg="green",
+            )
         except TokenRevokedError as exc:
             typer.secho(f"[FAIL] Canvas token — {exc}", fg="red")
             raise typer.Exit(1) from exc
@@ -117,8 +126,11 @@ async def doctor() -> None:
                 + ", ".join(sorted({(c.get("term") or {}).get("name") or "?" for c in raw})),
                 fg="yellow",
             )
-        if client.rate_limit_remaining is not None:
-            typer.echo(f"         quota remaining: {client.rate_limit_remaining:.0f}")
+        # isinstance, not "is not None": the mock's __getattr__ answers every unknown
+        # attribute with a raising stub function, which is not None but has no quota.
+        remaining = getattr(client, "rate_limit_remaining", None)
+        if isinstance(remaining, int | float):
+            typer.echo(f"         quota remaining: {remaining:.0f}")
 
     try:
         async with session_scope() as session:
@@ -585,7 +597,7 @@ async def extract(
     settings = get_settings()
     llm = OpenRouterClient(settings) if settings.openrouter_configured else None
     try:
-        async with CanvasClient(settings) as client, session_scope() as session:
+        async with open_canvas_client(settings) as client, session_scope() as session:
             report, results = await run_extraction(
                 session, settings, client, llm, course_code=course, force=force
             )

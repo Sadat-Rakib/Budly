@@ -68,29 +68,36 @@ def included(path: Path) -> bool:
     return not any(fnmatch.fnmatch(rel.name, g) for g in EXCLUDE_GLOBS)
 
 
-def collect(exclude_root: Path | None = None) -> list[Path]:
-    """Every bundled file, minus the release's own downloads directory.
+# Built artefacts that must not end up inside the bundle. ``public/downloads``
+# holds the *previous* release zip, and zipping a zip makes every rebuild grow
+# by the size of the last release. ``public/index.html`` is the checked-in copy
+# of the dashboard page whose SHA tooltip is already stale; the freshly filled
+# page is appended to the zip separately, so shipping the stale one too only
+# creates a duplicate entry.
+SKIP_RELATIVE = (
+    Path("public") / "downloads",
+    Path("public") / "index.html",
+)
 
-    Only ``<out>/downloads`` is skipped (the previous zips, which would otherwise be
-    written inside the new zip and make the bundle grow by itself on every rebuild).
-    The rest of ``public/`` -- the dashboard assets: mascots, fonts, app.js,
-    mascot.js, the filled index.html -- is *wanted* in the bundle, so a
-    self-hosted deployment serves a working dashboard out of the box.
+
+def collect(exclude_root: Path | None = None) -> list[Path]:
+    """Every bundled file, minus build output and the stale checked-in page.
+
+    Previous zips are skipped twice over: ``exclude_root`` is the ``--out``
+    directory of the current run, and ``public/downloads`` is the copy a
+    previous run left in the tree. The rest of ``public/`` -- the dashboard
+    assets: mascots, fonts, app.js, mascot.js -- is *wanted* in the bundle, so
+    a self-hosted deployment serves a working dashboard out of the box.
     """
-    skip_dir: Path | None = None
+    skip_dirs: list[Path] = [ROOT / rel for rel in SKIP_RELATIVE]
     if exclude_root is not None:
-        skip_dir = exclude_root / "downloads"
+        skip_dirs.append(exclude_root / "downloads")
     out: list[Path] = []
     for p in ROOT.rglob("*"):
         if not p.is_file() or not included(p):
             continue
-        if skip_dir is not None:
-            try:
-                p.relative_to(skip_dir)
-            except ValueError:
-                pass
-            else:
-                continue
+        if any(p == d or d in p.parents for d in skip_dirs):
+            continue
         out.append(p)
     return sorted(out)
 

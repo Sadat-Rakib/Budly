@@ -163,6 +163,8 @@ If you enable Telegram or Slack, notification content is sent to the service you
 | Scheduler not sending | Budly must be running at the scheduled time (or started within the catch-up window). Check the scheduler dot on the dashboard status line. |
 | Computer was asleep during the scheduled time | Budly generates a catch-up update on start if the slot is still within its window. |
 | Demo assignments appeared | `CANVAS_MOCK_MODE=true` is set in your `.env`. Remove it and restart. |
+| Sync fails with `column "submission_types" is of type text[]` | Your database predates Budly v1.0 and still uses the old column types. Run `uv run alembic upgrade head` once. Local SQLite stores create themselves and need no migration. |
+| Starting with `DATABASE_URL` unset still uses Postgres | An explicit value in `.env` wins. Delete the `DATABASE_URL` line to fall back to the local store in `~/.budly/budly.db`. |
 
 ## Project structure
 

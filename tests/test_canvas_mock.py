@@ -10,6 +10,9 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
+import pytest
+import typer
+
 from canvasbuddy.canvas import schemas
 from canvasbuddy.canvas.client import CanvasClient, open_canvas_client
 from canvasbuddy.canvas.mock import MOCK_ID_FLOOR, MockCanvasClient, build_fixture_world
@@ -180,3 +183,45 @@ class TestGating:
             record.levelno >= logging.WARNING and "MOCK" in record.getMessage()
             for record in records
         )
+
+    def test_doctor_never_opens_a_live_client_in_mock_mode(self, monkeypatch, capsys) -> None:
+        """``budly doctor`` used to construct CanvasClient directly, so with the demo
+        flag on it reported a 401 from a Canvas the deployment never talks to --
+        a false alarm in exactly the mode a newcomer tries first."""
+        from contextlib import asynccontextmanager
+
+        from canvasbuddy import cli
+
+        opened: list[object] = []
+
+        @asynccontextmanager
+        async def _fake_scope():
+            class _Scalars:
+                def all(self):
+                    return []
+
+            class _Session:
+                async def scalars(self, stmt):
+                    return _Scalars()
+
+            yield _Session()
+
+        def _tracking(settings):
+            client = open_canvas_client(settings)
+            opened.append(client)
+            return client
+
+        monkeypatch.setattr(cli, "get_settings", lambda: make_settings(canvas_mock_mode=True))
+        monkeypatch.setattr(cli, "open_canvas_client", _tracking)
+        monkeypatch.setattr(cli, "session_scope", _fake_scope)
+
+        with pytest.raises(typer.Exit) as caught:
+            cli.doctor()
+        assert caught.value.exit_code == 0  # warnings only, no FAILs
+
+        assert opened, "doctor checked no Canvas client at all"
+        assert all(isinstance(c, MockCanvasClient) for c in opened)
+        assert not any(isinstance(c, CanvasClient) for c in opened)
+        out = capsys.readouterr().out
+        assert "[FAIL]" not in out
+        assert "Demo Student" in out

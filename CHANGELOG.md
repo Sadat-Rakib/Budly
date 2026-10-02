@@ -62,3 +62,11 @@ notification scheduler in-process. No Supabase account, no cron service, no logi
   now silenced.
 - Announcement change events no longer duplicate the same announcement twice in
   "what's new" answers.
+- `budly doctor` and `budly extract` constructed a live Canvas client even with
+  `CANVAS_MOCK_MODE=true`, so the demo mode's first command reported a false
+  401 from a Canvas it never talked to. Both now go through the same client
+  factory as the sync path.
+- The release zip contained the previous release's zip inside `public/downloads`
+  (over half the bundle's size) and wrote `public/index.html` twice, with a
+  stale SHA tooltip winning depending on the extractor. The bundle now ships
+  each file once and no nested zips; it is 1.7 MB lighter.
