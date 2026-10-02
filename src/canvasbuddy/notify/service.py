@@ -7,7 +7,7 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.exc import IntegrityError
 
-from canvasbuddy.canvas.client import CanvasClient, TokenRevokedError
+from canvasbuddy.canvas.client import TokenRevokedError, open_canvas_client
 from canvasbuddy.config import Settings
 from canvasbuddy.db import session_scope
 from canvasbuddy.digest.builder import build_digest, render_digest
@@ -55,7 +55,7 @@ async def sync_now(settings: Settings) -> dict:
     "Canvas rejected the token" without re-running a sync to find out.
     """
     try:
-        async with CanvasClient(settings) as client, session_scope() as session:
+        async with open_canvas_client(settings) as client, session_scope() as session:
             report = await sync_all_safe(session, client, settings)
         async with session_scope() as s:
             await settings_put(s, "last_sync_at", datetime.now(UTC).isoformat())
@@ -63,6 +63,7 @@ async def sync_now(settings: Settings) -> dict:
         log.info("sync: %s", report.summary().replace("\n", " | "))
         return {
             "ok": True,
+            "mock": settings.canvas_mock_mode,
             "summary": report.summary(),
             "report": {
                 "courses_tracked": report.courses_tracked,
@@ -74,7 +75,12 @@ async def sync_now(settings: Settings) -> dict:
     except TokenRevokedError as exc:
         async with session_scope() as s:
             await settings_put(s, "last_sync_error", f"Canvas token rejected: {exc}")
-        return {"ok": False, "kind": "token", "error": f"Canvas token rejected: {exc}"}
+        return {
+            "ok": False,
+            "mock": settings.canvas_mock_mode,
+            "kind": "token",
+            "error": f"Canvas token rejected: {exc}",
+        }
     except Exception as exc:  # noqa: BLE001
         log.exception("sync failed")
         message = f"{type(exc).__name__}: {exc}"
@@ -83,7 +89,12 @@ async def sync_now(settings: Settings) -> dict:
                 await settings_put(s, "last_sync_error", message)
         except Exception:  # noqa: BLE001
             log.exception("could not record sync failure")
-        return {"ok": False, "kind": "canvas", "error": message}
+        return {
+            "ok": False,
+            "mock": settings.canvas_mock_mode,
+            "kind": "canvas",
+            "error": message,
+        }
 
 
 async def _maybe_sync(settings: Settings, force: bool) -> tuple[bool, str | None]:

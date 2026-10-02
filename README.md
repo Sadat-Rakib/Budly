@@ -109,6 +109,10 @@ uv run uvicorn api.index:app --reload
 
 Then open http://127.0.0.1:8000, sign in with `DASHBOARD_PASSWORD`, and ask Postbot something.
 
+### Developing without a Canvas account
+
+Set `CANVAS_MOCK_MODE=true` and StudyBuddy swaps Canvas for a built-in fixture world: three courses with work due today, tomorrow and later, an overdue item, a completed and graded item, undated graded work, and recent announcements. Sync once to bootstrap, sync again and the fixture term moves on (a deadline moves, new work and an announcement appear) so change detection, digests and "what's new?" all have something true to answer. The dashboard shows a Demo data badge, sync results carry `mock: true`, and the client logs a warning on every start, so it can never pass silently. Never enable it in production.
+
 ### Deploying it online
 
 The hosted version runs entirely on free tiers and does not need your laptop:

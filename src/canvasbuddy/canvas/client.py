@@ -23,13 +23,16 @@ import asyncio
 import logging
 import random
 from datetime import date, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import httpx
 
 from canvasbuddy.config import Settings
 
 log = logging.getLogger(__name__)
+
+if TYPE_CHECKING:
+    from canvasbuddy.canvas.mock import MockCanvasClient
 
 #: Canvas returns 403 (older deployments) or 429 (newer) when the bucket empties.
 _RATE_LIMIT_STATUSES = {403, 429}
@@ -377,3 +380,19 @@ class CanvasClient:
                 log.info("Files tab not visible for course %s; skipping", course_id)
                 return []
             raise
+
+
+def open_canvas_client(settings: Settings) -> CanvasClient | MockCanvasClient:
+    """The sync path's single construction point for a Canvas client.
+
+    With ``CANVAS_MOCK_MODE`` set, this returns the fixture client so the whole
+    product -- sync, digests, chat -- runs against realistic demo data with no
+    Canvas account. The mock is loud on purpose (it logs on every construction,
+    sync results are flagged, and the dashboard shows a Demo data badge), because
+    a mock that can pass unnoticed in production is a liability.
+    """
+    if settings.canvas_mock_mode:
+        from canvasbuddy.canvas.mock import MockCanvasClient
+
+        return MockCanvasClient(settings)
+    return CanvasClient(settings)

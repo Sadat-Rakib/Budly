@@ -26,9 +26,18 @@ class Settings(BaseSettings):
     canvas_base_url: str
     canvas_token: SecretStr
     canvas_term: str = "2026 Fall"
+    #: Serve built-in fixture courses instead of calling Canvas. For local
+    #: development and demos without a Canvas account. Never enable this on a
+    #: production deployment: syncs then write fixture data, and the dashboard
+    #: shows a Demo data badge so it can never pass silently.
+    canvas_mock_mode: bool = False
 
     # --- Database -----------------------------------------------------------
     database_url: str
+    #: Optional schema isolation (e.g. "canvasmock" for a throwaway mock-mode run).
+    #: Empty means the database default. Every connection then resolves unqualified
+    #: tables inside that schema, leaving the public schema untouched.
+    database_search_path: str = ""
 
     # --- Telegram -----------------------------------------------------------
     telegram_bot_token: SecretStr | None = None

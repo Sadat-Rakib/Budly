@@ -97,6 +97,11 @@ async def sync_all(
 
     await session.flush()
 
+    if getattr(client, "mock", False) and all(c.bootstrapped_at is not None for c in tracked):
+        # The fixture Canvas tells its change story (moved deadline, new work, news)
+        # on every sync after the bootstrap pass, so demos exercise change detection.
+        client.apply_scripted_changes()
+
     planner_ids = await _fetch_planner_ids(client, tracked)
 
     for course in tracked:

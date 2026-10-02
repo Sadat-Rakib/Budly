@@ -19,12 +19,19 @@ from canvasbuddy.config import get_settings
 @lru_cache
 def get_engine() -> AsyncEngine:
     settings = get_settings()
+    connect_args: dict = {}
+    if settings.database_search_path:
+        # Optional schema isolation (e.g. a throwaway schema for demo/mock runs).
+        # Unqualified table names then resolve inside that schema on every
+        # connection, keeping the public schema untouched.
+        connect_args["server_settings"] = {"search_path": settings.database_search_path}
     return create_async_engine(
         settings.database_url,
         # Railway cron services start, work, and exit. Recycling connections keeps a
         # long-lived process from holding a socket the database has already dropped.
         pool_pre_ping=True,
         pool_recycle=1800,
+        connect_args=connect_args,
     )
 
 

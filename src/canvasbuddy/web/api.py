@@ -202,6 +202,7 @@ async def status(request: Request) -> dict:
         "server_time": datetime.now(UTC).isoformat(),
         "canvas": {
             "configured": True,
+            "mock": settings.canvas_mock_mode,
             "base_url": host,
             "last_sync_at": last_sync_at,
             "last_sync_error": last_error,

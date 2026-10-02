@@ -34,7 +34,7 @@ from telegram.ext import (
 from canvasbuddy.agent.loop import run_agent
 from canvasbuddy.agent.memory import load_history, maybe_summarize, save_turn
 from canvasbuddy.agent.prompt import build_system_prompt
-from canvasbuddy.canvas.client import CanvasClient, TokenRevokedError
+from canvasbuddy.canvas.client import CanvasClient, TokenRevokedError, open_canvas_client
 from canvasbuddy.config import Settings, get_settings
 from canvasbuddy.db import get_engine, session_scope
 from canvasbuddy.digest.builder import build_digest, render_digest
@@ -188,7 +188,7 @@ async def cmd_grades(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
 async def cmd_sync(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     settings: Settings = context.application.bot_data["settings"]
     async with _typing(update):
-        async with CanvasClient(settings) as client, session_scope() as session:
+        async with open_canvas_client(settings) as client, session_scope() as session:
             report = await sync_all(session, client, settings)
     await _reply(update, report.summary())
 
@@ -555,7 +555,7 @@ async def cmd_testnotify(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 async def job_sync(context: ContextTypes.DEFAULT_TYPE) -> None:
     settings: Settings = context.application.bot_data["settings"]
     try:
-        async with CanvasClient(settings) as client, session_scope() as session:
+        async with open_canvas_client(settings) as client, session_scope() as session:
             report = await sync_all(session, client, settings)
         log.info("Scheduled sync: %s", report.summary().replace("\n", " | "))
     except TokenRevokedError as exc:

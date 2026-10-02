@@ -237,6 +237,20 @@ class TestStatus:
 
 
 @pytest.mark.asyncio
+class TestMockModeSurfacing:
+    async def test_status_exposes_mock_flag(self, app_env, client, monkeypatch) -> None:
+        settings = app_env(canvas_mock_mode=True)
+        patch_tools(
+            monkeypatch, list_upcoming={"due": []}, list_overdue={"overdue": [], "count": 0}
+        )
+        session = FakeSession(courses=[course()])
+        async with await client(session, settings) as c:
+            response = await c.get("/api/status", headers=auth_cookie(settings))
+        assert response.status_code == 200
+        assert response.json()["canvas"]["mock"] is True
+
+
+@pytest.mark.asyncio
 class TestChat:
     async def test_chat_returns_answer_with_sources(self, app_env, client, monkeypatch) -> None:
         settings = app_env()

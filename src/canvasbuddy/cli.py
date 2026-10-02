@@ -18,7 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from canvasbuddy.canvas.client import CanvasClient, TokenRevokedError
+from canvasbuddy.canvas.client import CanvasClient, TokenRevokedError, open_canvas_client
 from canvasbuddy.config import Settings, get_settings
 from canvasbuddy.db import session_scope
 from canvasbuddy.digest.builder import DigestContent, build_digest, render_digest
@@ -369,7 +369,7 @@ async def sync(
 ) -> None:
     """Run one sync pass over Canvas."""
     settings = get_settings()
-    async with CanvasClient(settings) as client, session_scope() as session:
+    async with open_canvas_client(settings) as client, session_scope() as session:
         report = await sync_all(session, client, settings, dry_run=dry_run)
 
     typer.echo(report.summary())
@@ -482,7 +482,7 @@ async def tick() -> None:
     now_local = datetime.now(UTC).astimezone(settings.tz)
 
     try:
-        async with CanvasClient(settings) as client, session_scope() as session:
+        async with open_canvas_client(settings) as client, session_scope() as session:
             report = await sync_all(session, client, settings)
         typer.echo(report.summary())
     except TokenRevokedError as exc:

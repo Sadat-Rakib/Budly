@@ -168,6 +168,15 @@
     statusline.innerHTML = '';
     statusline.appendChild(line);
 
+    // Mock mode is never silent: the badge travels with every status render.
+    if (status.canvas && status.canvas.mock) {
+      var demo = document.createElement('span');
+      demo.className = 'demobadge';
+      demo.textContent = 'Demo data';
+      demo.title = 'CANVAS_MOCK_MODE is on — these are built-in fixtures, not your Canvas';
+      statusline.appendChild(demo);
+    }
+
     if (status.canvas && status.canvas.last_sync_at) {
       var synced = document.createElement('span');
       synced.className = 'syncinfo';
