@@ -57,8 +57,13 @@ def test_placeholders_and_license(tmp_path: Path):
 
 
 def test_no_http_in_landing():
-    html = (Path(__file__).resolve().parent.parent / "site" / "src" / "index.html").read_text(
-        encoding="utf-8"
-    )
-    assert "{{VERSION}}" in html
+    root = Path(__file__).resolve().parent.parent
+    source = root / "site" / "src" / "index.html"
+    if source.exists():
+        html = source.read_text(encoding="utf-8")
+        assert "{{VERSION}}" in html
+    else:
+        # Release zips ship the built page; the placeholder check only applies to
+        # the source template.
+        html = (root / "public" / "index.html").read_text(encoding="utf-8")
     assert "http" not in html.lower(), "landing page must make no third-party requests"

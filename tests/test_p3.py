@@ -27,7 +27,7 @@ def make_settings(**overrides: object) -> Settings:
         "openrouter_api_key": "sk-or-test",
     }
     defaults.update(overrides)
-    return Settings(**defaults)  # type: ignore[arg-type]
+    return Settings(_env_file=None, **defaults)  # type: ignore[arg-type]
 
 
 def said(text: str) -> dict:

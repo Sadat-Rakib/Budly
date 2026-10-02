@@ -31,7 +31,7 @@ def make_settings(**overrides: object) -> Settings:
         "agent_max_iterations": 3,
     }
     defaults.update(overrides)
-    return Settings(**defaults)  # type: ignore[arg-type]
+    return Settings(_env_file=None, **defaults)  # type: ignore[arg-type]
 
 
 def assistant_tool_call(name: str, arguments: dict | str, call_id: str = "call_1") -> dict:

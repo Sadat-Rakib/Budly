@@ -29,7 +29,7 @@ def make_settings(**overrides: object) -> Settings:
         "checkin_slot": "",
     }
     defaults.update(overrides)
-    return Settings(**defaults)  # type: ignore[arg-type]
+    return Settings(_env_file=None, **defaults)  # type: ignore[arg-type]
 
 
 class FrozenDatetime(datetime):

@@ -28,7 +28,7 @@ def _settings(**overrides) -> Settings:
         "user_timezone": "America/Edmonton",
     }
     defaults.update(overrides)
-    return Settings(**defaults)  # type: ignore[arg-type]
+    return Settings(_env_file=None, **defaults)  # type: ignore[arg-type]
 
 
 def _assignment(**kw) -> Assignment:

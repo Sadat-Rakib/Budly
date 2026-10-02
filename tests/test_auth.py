@@ -27,7 +27,7 @@ def make_settings(**overrides: object) -> Settings:
         "telegram_chat_id": AUTHORISED,
     }
     defaults.update(overrides)
-    return Settings(**defaults)  # type: ignore[arg-type]
+    return Settings(_env_file=None, **defaults)  # type: ignore[arg-type]
 
 
 def context(settings: Settings) -> SimpleNamespace:

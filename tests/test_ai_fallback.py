@@ -29,7 +29,7 @@ def make_settings(**overrides: object) -> Settings:
         "ai_fallback_model_2": "fallback/two",
     }
     defaults.update(overrides)
-    return Settings(**defaults)  # type: ignore[arg-type]
+    return Settings(_env_file=None, **defaults)  # type: ignore[arg-type]
 
 
 def said(text: str) -> dict:

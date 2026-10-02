@@ -120,6 +120,17 @@ def main() -> int:
     shutil.rmtree(out, ignore_errors=True)
     dl.mkdir(parents=True)
 
+    # The dashboard assets come from site/src (their canonical home); they are
+    # copied into the output FIRST so the bundle collects a complete public/.
+    for extra in (ROOT / "site" / "src").iterdir():
+        if extra.name == "index.html":
+            continue
+        target = out / extra.name
+        if extra.is_file():
+            shutil.copy(extra, target)
+        else:
+            shutil.copytree(extra, target)
+
     files = collect(exclude_root=out.resolve())
     required = {"LICENSE", "README.md", "SETUP.md", ".env.example", "pyproject.toml"}
     missing = required - {str(f.relative_to(ROOT)) for f in files}
@@ -142,24 +153,34 @@ def main() -> int:
             info.external_attr = (0o755 if f.suffix in {".py", ".sh"} else 0o644) << 16
             z.writestr(info, f.read_bytes())
 
+    # The zip ships a copy of the dashboard page with the version filled in. The
+    # checksum is deliberately NOT embedded here: a page inside the zip cannot
+    # contain that zip's own hash. It lives in SHA256SUMS.txt beside the download.
+    zip_html = (ROOT / "site" / "src" / "index.html").read_text(encoding="utf-8")
+    zip_html = zip_html.replace("{{VERSION}}", version)
+    zip_html = zip_html.replace("{{SHA256}}", "see SHA256SUMS.txt beside the download")
+    zip_html = zip_html.replace("{{SIZE}}", "free & open source")
+    with zipfile.ZipFile(zip_path, "a", zipfile.ZIP_DEFLATED) as z:
+        info = zipfile.ZipInfo(f"{prefix}/public/index.html", date_time=(2026, 1, 1, 0, 0, 0))
+        info.compress_type = zipfile.ZIP_DEFLATED
+        info.external_attr = 0o644 << 16
+        z.writestr(info, zip_html.encode("utf-8"))
+
     sha = hashlib.sha256(zip_path.read_bytes()).hexdigest()
     size_kb = round(zip_path.stat().st_size / 1024)
     shutil.copy(zip_path, dl / f"{args.slug}-latest.zip")
     (dl / "SHA256SUMS.txt").write_text(f"{sha}  {zip_path.name}\n")
     shutil.copy(ROOT / "LICENSE", out / "LICENSE.txt")
 
+    # The showcase page gets the real checksum: it is written after the zip is
+    # final, and it lives outside the zip, so there is no self-reference.
     src_html = ROOT / "site" / "src" / "index.html"
     html = src_html.read_text(encoding="utf-8")
     for key, val in {"VERSION": version, "SHA256": sha, "SIZE": f"{size_kb} KB"}.items():
         html = html.replace("{{" + key + "}}", val)
     (out / "index.html").write_text(html, encoding="utf-8")
-    for extra in (ROOT / "site" / "src").iterdir():
-        if extra.name != "index.html":
-            shutil.copy(extra, out / extra.name) if extra.is_file() else shutil.copytree(
-                extra, out / extra.name
-            )
 
-    print(f"OK {zip_path.name} {size_kb} KB sha256={sha[:12]}… ({len(files)} files)")
+    print(f"OK {zip_path.name} {size_kb} KB sha256={sha[:12]}… ({len(files) + 1} files)")
     return 0
 
 

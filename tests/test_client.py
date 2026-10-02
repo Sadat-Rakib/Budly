@@ -26,7 +26,7 @@ def make_settings(**overrides: object) -> Settings:
         rate_limit_sleep_seconds=0.0,
     )
     defaults.update(overrides)
-    return Settings(**defaults)  # type: ignore[arg-type]
+    return Settings(_env_file=None, **defaults)  # type: ignore[arg-type]
 
 
 @pytest.fixture(autouse=True)

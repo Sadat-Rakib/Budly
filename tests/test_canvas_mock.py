@@ -23,7 +23,7 @@ def make_settings(**overrides: object) -> Settings:
         "database_url": "postgresql://u:p@localhost/db",
     }
     defaults.update(overrides)
-    return Settings(**defaults)  # type: ignore[arg-type]
+    return Settings(_env_file=None, **defaults)  # type: ignore[arg-type]
 
 
 FIXTURE_TODAY = datetime(2026, 10, 1, tzinfo=UTC).date()
